@@ -1,0 +1,22 @@
+import android.opengl.GLES10.*
+import android.opengl.GLSurfaceView
+import javax.microedition.khronos.egl.EGLConfig
+import javax.microedition.khronos.opengles.GL10
+
+class MyRenderer:GLSurfaceView.Renderer{
+    //当Surface创建后会调用此方法
+    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        glClearColor(1.0f,0.0f,0.0f,0.0f);//清空屏幕的颜色，本例为红色
+    }
+
+    //当Surface创建成功或尺寸改变时都调用此方法
+    override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        glViewport(0,0,width,height);
+    }
+
+    //每绘制一帧都会调用此方法
+    override fun onDrawFrame(gl: GL10?) {
+        //清空颜色缓冲区，然后使用glClearColor()方法设置填充屏幕的颜色
+        glClear(GL_COLOR_BUFFER_BIT);
+    }
+}
