@@ -1,24 +1,18 @@
-package com.example.android.camera2.basic.fragments
-
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.ImageFormat
+import android.graphics.SurfaceTexture
 import android.hardware.camera2.*
-import android.hardware.camera2.params.ColorSpaceTransform
-import android.hardware.camera2.params.RggbChannelVector
 import android.media.Image
 import android.media.ImageReader
+import android.opengl.GLES20
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
-import android.view.LayoutInflater
-import android.view.Surface
-import android.view.SurfaceHolder
-import android.view.View
-import android.view.ViewGroup
+import android.view.*
 import android.widget.Toast
 import androidx.core.graphics.drawable.toDrawable
 import androidx.exifinterface.media.ExifInterface
@@ -28,23 +22,25 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.Navigation
 import androidx.navigation.fragment.navArgs
+import com.example.android.camera.utils.OrientationLiveData
 import com.example.android.camera.utils.computeExifOrientation
 import com.example.android.camera.utils.getPreviewOutputSize
-import com.example.android.camera.utils.OrientationLiveData
-import com.example.android.camera2.basic.CameraActivity
-import com.example.android.camera2.basic.LableLib
-import com.example.android.camera2.basic.R
+import com.example.android.camera2.basic.*
+import com.example.android.camera2.basic.GLSurfaceView.MyRenderer
 import com.example.android.camera2.basic.databinding.FragmentCameraBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.*
 import java.text.SimpleDateFormat
+import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeoutException
-import java.util.Date
-import java.util.Locale
-import kotlin.RuntimeException
+import kotlin.collections.ArrayList
+import kotlin.collections.List
+import kotlin.collections.asList
+import kotlin.collections.listOf
+import kotlin.collections.maxByOrNull
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -128,6 +124,25 @@ class CameraFragment : Fragment() {
      */
     private var restartPreview = false
 
+    /** GLSurfaceView  */
+    private lateinit var glSurfaceView:AutoFitGLSurfaceView
+    /** SurfaceTexture  */
+    private lateinit var cameraSurfaceTexture:SurfaceTexture
+    /** 使用cameraSurfaceTexture初始化Surface */
+    private lateinit var previewSurface: Surface
+
+    // SurfaceTexture配合GLSurfaceView实现渲染的关键代码
+    // 初始化surface texture
+    fun initSurfaceTexture(textureCallback: (surfaceTexture: SurfaceTexture) -> Unit) {
+        //创建纹理id
+        val args = IntArray(1)
+        GLES20.glGenTextures(args.size, args, 0)
+        val surfaceTexName = args[0]
+        //创建SurfaceTexture并传入tex[0]
+        val internalSurfaceTexture = SurfaceTexture(surfaceTexName)
+        textureCallback(internalSurfaceTexture)
+    }
+
 
     override fun onCreateView(
             inflater: LayoutInflater,
@@ -141,13 +156,29 @@ class CameraFragment : Fragment() {
     @SuppressLint("MissingPermission")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        glSurfaceView = fragmentCameraBinding.glv!!
+        glSurfaceView.setEGLContextClientVersion(2)
+        glSurfaceView.setRenderer(MyRenderer())
+        initSurfaceTexture {
+            cameraSurfaceTexture = it
+            cameraSurfaceTexture.setOnFrameAvailableListener {
+                fun onFrameAvailable(surfaceTexture: SurfaceTexture) {
+                    glSurfaceView.requestRender()
+                    cameraSurfaceTexture.updateTexImage()
+                }
+            }
+            previewSurface = Surface(cameraSurfaceTexture)
+            cameraSurfaceTexture.updateTexImage()
+        }
+
+
         fragmentCameraBinding.captureButton.setOnApplyWindowInsetsListener { v, insets ->
             v.translationX = (-insets.systemWindowInsetRight).toFloat()
             v.translationY = (-insets.systemWindowInsetBottom).toFloat()
             insets.consumeSystemWindowInsets()
         }
 
-        fragmentCameraBinding.viewFinder.holder.addCallback(object : SurfaceHolder.Callback {
+        glSurfaceView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
 
             override fun surfaceChanged(
@@ -159,13 +190,14 @@ class CameraFragment : Fragment() {
             override fun surfaceCreated(holder: SurfaceHolder) {
                 // Selects appropriate preview size and configures view finder
                 val previewSize = getPreviewOutputSize(
-                    fragmentCameraBinding.viewFinder.display,
+//                    fragmentCameraBinding.viewFinder.display,
+                    glSurfaceView.display,
                     characteristics,
                     SurfaceHolder::class.java
                 )
-                Log.d(TAG, "View finder size: ${fragmentCameraBinding.viewFinder.width} x ${fragmentCameraBinding.viewFinder.height}")
+                Log.d(TAG, "View finder size: ${glSurfaceView.width} x ${glSurfaceView.height}")
                 Log.d(TAG, "Selected preview size: $previewSize")
-                fragmentCameraBinding.viewFinder.setAspectRatio(
+                glSurfaceView.setAspectRatio(
                     previewSize.width,
                     previewSize.height
                 )
@@ -184,6 +216,12 @@ class CameraFragment : Fragment() {
 
         //获取所有支持的AWB模式
         awbModes.addAll(characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES)!!.asList())
+
+        if (currentAWB == -1) {
+            currentAWB = awbModes[0]
+            currentAWBIdx = 0
+            fragmentCameraBinding.switchButton!!.text = LableLib.getAWBLabel(currentAWB)
+        }
         //切换相机模式
         fragmentCameraBinding.switchButton!!.setOnClickListener { v ->
             if (v.id == R.id.switch_button) {
@@ -195,9 +233,10 @@ class CameraFragment : Fragment() {
                         restartPreview = true
                     }
                     try {
-                        cameraCaptureSession.stopRepeating()
-                        //会触发session的closed，重建preview
-                        cameraCaptureSession.close()
+//                        cameraCaptureSession.stopRepeating()
+//                        //会触发session的closed，重建preview
+//                        cameraCaptureSession.close()
+                        previewRequest()    //直接重发request
                     } catch (e: Exception) {
                         Log.e(TAG, "Camera failure when closing camera extension")
                     }
@@ -349,26 +388,35 @@ class CameraFragment : Fragment() {
             size.width, size.height, args.pixelFormat, IMAGE_BUFFER_SIZE)
 
         // Creates list of Surfaces where the camera will output frames
-        val targets = listOf(fragmentCameraBinding.viewFinder.holder.surface, imageReader.surface)
+        val targets = listOf(
+//            fragmentCameraBinding.viewFinder.holder.surface,
+            previewSurface,
+            imageReader.surface
+        )
 
         // Start a capture session using our open camera and list of Surfaces where frames will go
         cameraCaptureSession = createCaptureSession(camera, targets, cameraHandler)
+        previewRequest()
+    }
 
+    /**
+     * 提交与camera参数设置相关的request（如白平衡、色温）
+     */
+    private fun  previewRequest(){
         submitRequest(
             CameraDevice.TEMPLATE_PREVIEW,
-            fragmentCameraBinding.viewFinder.holder.surface,
+            previewSurface,
+//            fragmentCameraBinding.viewFinder.holder.surface,
             true,
             null
         ) { request ->
             request.apply {
                 set(CaptureRequest.CONTROL_AWB_MODE, currentAWB)
-                set(CaptureRequest.COLOR_CORRECTION_TRANSFORM,
-                    ColorSpaceTransform({ 1,1,1,1,1,1,1,1,1 })
-                )
-                set(CaptureRequest.COLOR_CORRECTION_GAINS, RggbChannelVector(2.0f,2.0f,2.0f,2.0f))
+                set(CaptureRequest.COLOR_CORRECTION_MODE,CaptureRequest.COLOR_CORRECTION_MODE_TRANSFORM_MATRIX)
             }
         }
     }
+
 
     /**
      * @param templateType request的种类，如：CameraDevice.TEMPLATE_STILL_CAPTURE
@@ -442,7 +490,8 @@ class CameraFragment : Fragment() {
                     timestamp: Long,
                     frameNumber: Long) {
                     super.onCaptureStarted(session, request, timestamp, frameNumber)
-                    fragmentCameraBinding.viewFinder.post(animationTask)
+                    glSurfaceView.post(animationTask)
+//                    fragmentCameraBinding.viewFinder.post(animationTask)
                 }
 
                 override fun onCaptureCompleted(
@@ -498,7 +547,7 @@ class CameraFragment : Fragment() {
                     }
                 }
             }
-
+        //TODO
         submitRequest(
             CameraDevice.TEMPLATE_STILL_CAPTURE,  //表示拍单张照片
             imageReader.surface,   //输出在imageReader上
@@ -603,3 +652,4 @@ class CameraFragment : Fragment() {
         }
     }
 }
+
