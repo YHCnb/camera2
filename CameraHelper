@@ -1,0 +1,56 @@
+class CameraHelper(mcontext: Context) {
+    private var cameraId:Int = -1
+    private var pixelFormat: Int = -1
+    private val context:Context = mcontext
+
+    /** Detects, characterizes, and connects to a CameraDevice (used for all camera operations) */
+    private val cameraManager: CameraManager by lazy {
+        context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+    }
+
+    /** [CameraCharacteristics] corresponding to the provided Camera ID */
+    private val characteristics: CameraCharacteristics by lazy {
+        cameraManager.getCameraCharacteristics(cameraId)
+    }
+
+    /** Readers used as buffers for camera still shots */
+    private lateinit var imageReader: ImageReader
+
+    /** [HandlerThread] where all camera operations run */
+    private lateinit var cameraThread :HandlerThread
+
+    /** [Handler] corresponding to [cameraThread] */
+    private lateinit var cameraHandler :Handler
+
+    /** [HandlerThread] where all buffer reading operations run */
+    private val imageReaderThread = HandlerThread("imageReaderThread").apply { start() }
+
+    /** [Handler] corresponding to [imageReaderThread] */
+    private val imageReaderHandler = Handler(imageReaderThread.looper)
+
+    /** The [CameraDevice] that will be opened in this fragment */
+    private lateinit var camera: CameraDevice
+
+    /** Internal reference to the ongoing [CameraCaptureSession] configured with our parameters */
+    private lateinit var cameraCaptureSession: CameraCaptureSession
+
+    /** Live data listener for changes in the device orientation relative to the camera
+     *  横屏与竖屏检测
+     * */
+    private lateinit var relativeOrientation: OrientationLiveData
+
+    /**
+     * 支持的awb模式,以及目前的模式
+     */
+    private val awbModes = ArrayList<Int>()
+    private var currentAWB = -1
+    private var currentAWBIdx = -1
+
+    /**
+     * Flag whether we should restart preview after an extension switch.
+     */
+    private var restartPreview = false
+
+    /** GlRenderView  */
+    private lateinit var glRenderView: GlRenderView
+    /** GLSurfaceView
