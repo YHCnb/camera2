@@ -1,50 +1,3 @@
-import android.annotation.SuppressLint
-import android.content.Context
-import android.graphics.Color
-import android.graphics.ImageFormat
-import android.graphics.SurfaceTexture
-import android.hardware.camera2.*
-import android.media.Image
-import android.media.ImageReader
-import android.opengl.GLES20
-import android.os.Build
-import android.os.Bundle
-import android.os.Handler
-import android.os.HandlerThread
-import android.util.Log
-import android.view.*
-import android.widget.Toast
-import androidx.core.graphics.drawable.toDrawable
-import androidx.exifinterface.media.ExifInterface
-import androidx.fragment.app.Fragment
-import androidx.lifecycle.Observer
-import androidx.lifecycle.lifecycleScope
-import androidx.navigation.NavController
-import androidx.navigation.Navigation
-import androidx.navigation.fragment.navArgs
-import com.example.android.camera.utils.OrientationLiveData
-import com.example.android.camera.utils.computeExifOrientation
-import com.example.android.camera.utils.getPreviewOutputSize
-import com.example.android.camera2.basic.*
-import com.example.android.camera2.basic.GLSurfaceView.MyRenderer
-import com.example.android.camera2.basic.databinding.FragmentCameraBinding
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import java.io.*
-import java.text.SimpleDateFormat
-import java.util.*
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.TimeoutException
-import kotlin.collections.ArrayList
-import kotlin.collections.List
-import kotlin.collections.asList
-import kotlin.collections.listOf
-import kotlin.collections.maxByOrNull
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
-
 class CameraFragment : Fragment() {
 
     /** Android ViewBinding */
@@ -124,8 +77,10 @@ class CameraFragment : Fragment() {
      */
     private var restartPreview = false
 
+    /** GlRenderView  */
+    private lateinit var glRenderView: GlRenderView
     /** GLSurfaceView  */
-    private lateinit var glSurfaceView:AutoFitGLSurfaceView
+    private lateinit var glSurfaceView: AutoFitGLSurfaceView
     /** SurfaceTexture  */
     private lateinit var cameraSurfaceTexture:SurfaceTexture
     /** 使用cameraSurfaceTexture初始化Surface */
@@ -145,9 +100,9 @@ class CameraFragment : Fragment() {
 
 
     override fun onCreateView(
-            inflater: LayoutInflater,
-            container: ViewGroup?,
-            savedInstanceState: Bundle?
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
     ): View {
         _fragmentCameraBinding = FragmentCameraBinding.inflate(inflater, container, false)
         return fragmentCameraBinding.root
@@ -156,20 +111,22 @@ class CameraFragment : Fragment() {
     @SuppressLint("MissingPermission")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        glSurfaceView = fragmentCameraBinding.glv!!
-        glSurfaceView.setEGLContextClientVersion(2)
-        glSurfaceView.setRenderer(MyRenderer())
         initSurfaceTexture {
             cameraSurfaceTexture = it
             cameraSurfaceTexture.setOnFrameAvailableListener {
-                fun onFrameAvailable(surfaceTexture: SurfaceTexture) {
-                    glSurfaceView.requestRender()
-                    cameraSurfaceTexture.updateTexImage()
-                }
+                glSurfaceView.requestRender()
             }
             previewSurface = Surface(cameraSurfaceTexture)
-            cameraSurfaceTexture.updateTexImage()
         }
+        glSurfaceView = fragmentCameraBinding.glv!!
+        val glRenderer = MyRenderer()
+        glSurfaceView.setEGLContextClientVersion(2)
+        glRenderer.setSurfaceTexture(cameraSurfaceTexture)
+        glSurfaceView.setRenderer(glRenderer)
+
+        glRenderView = fragmentCameraBinding.renderView!!
+        glRenderView.setOnRecordListener(this)
+
 
 
         fragmentCameraBinding.captureButton.setOnApplyWindowInsetsListener { v, insets ->
@@ -182,10 +139,10 @@ class CameraFragment : Fragment() {
             override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
 
             override fun surfaceChanged(
-                    holder: SurfaceHolder,
-                    format: Int,
-                    width: Int,
-                    height: Int) = Unit
+                holder: SurfaceHolder,
+                format: Int,
+                width: Int,
+                height: Int) = Unit
 
             override fun surfaceCreated(holder: SurfaceHolder) {
                 // Selects appropriate preview size and configures view finder
@@ -304,9 +261,9 @@ class CameraFragment : Fragment() {
      * */
     @SuppressLint("MissingPermission")
     private suspend fun openCamera(
-            manager: CameraManager,
-            cameraId: String,
-            handler: Handler? = null
+        manager: CameraManager,
+        cameraId: String,
+        handler: Handler? = null
     ): CameraDevice = suspendCancellableCoroutine { cont ->
         manager.openCamera(cameraId, object : CameraDevice.StateCallback() {
             override fun onOpened(device: CameraDevice) = cont.resume(device)
@@ -337,9 +294,9 @@ class CameraFragment : Fragment() {
      * suspend coroutine
      */
     private suspend fun createCaptureSession(
-            device: CameraDevice,
-            targets: List<Surface>,
-            handler: Handler? = null
+        device: CameraDevice,
+        targets: List<Surface>,
+        handler: Handler? = null
     ): CameraCaptureSession = suspendCoroutine { cont ->
 
         // Create a capture session using the predefined targets; this also involves defining the
@@ -385,7 +342,8 @@ class CameraFragment : Fragment() {
             CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
             .getOutputSizes(args.pixelFormat).maxByOrNull { it.height * it.width }!!
         imageReader = ImageReader.newInstance(
-            size.width, size.height, args.pixelFormat, IMAGE_BUFFER_SIZE)
+            size.width, size.height, args.pixelFormat, IMAGE_BUFFER_SIZE
+        )
 
         // Creates list of Surfaces where the camera will output frames
         val targets = listOf(
@@ -539,8 +497,10 @@ class CameraFragment : Fragment() {
                             val exifOrientation = computeExifOrientation(rotation, mirrored)
 
                             // Build the result and resume progress
-                            cont.resume(CombinedCaptureResult(
-                                image, result, exifOrientation, imageReader.imageFormat))
+                            cont.resume(
+                                CombinedCaptureResult(
+                                image, result, exifOrientation, imageReader.imageFormat)
+                            )
 
                             // There is no need to break out of the loop, this coroutine will suspend
                         }
@@ -633,10 +593,10 @@ class CameraFragment : Fragment() {
 
         /** Helper data class used to hold capture metadata with their associated image */
         data class CombinedCaptureResult(
-                val image: Image,
-                val metadata: CaptureResult,
-                val orientation: Int,
-                val format: Int
+            val image: Image,
+            val metadata: CaptureResult,
+            val orientation: Int,
+            val format: Int
         ) : Closeable {
             override fun close() = image.close()
         }
