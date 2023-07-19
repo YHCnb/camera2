@@ -1,0 +1,67 @@
+class GlRenderView @JvmOverloads constructor(context: Context?, attrs: AttributeSet? = null) :
+    GLSurfaceView(context, attrs) {
+    private var mSpeed = Speed.MODE_NORMAL
+    private var savePath: String? = null
+    private var onRecordListener: OnRecordListener? = null
+
+    enum class Speed {
+        MODE_EXTRA_SLOW, MODE_SLOW, MODE_NORMAL, MODE_FAST, MODE_EXTRA_FAST
+    }
+
+    private val glRender: MyRenderer
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        super.surfaceDestroyed(holder)
+        glRender.onSurfaceDestory()
+    }
+
+    fun startRecord() {
+        var speed = 1f
+        speed = when (mSpeed) {
+            Speed.MODE_EXTRA_SLOW -> 0.3f
+            Speed.MODE_SLOW -> 0.5f
+            Speed.MODE_NORMAL -> 1f
+            Speed.MODE_FAST -> 1.5f
+            Speed.MODE_EXTRA_FAST -> 3f
+        }
+        glRender.startRecord(speed, savePath)
+    }
+
+    fun stopRecord() {
+        glRender.stopRecord()
+    }
+
+    fun setSpeed(speed: Speed) {
+        mSpeed = speed
+    }
+
+    fun setSavePath(savePath: String?) {
+        this.savePath = savePath
+    }
+
+    fun enableStick(isChecked: Boolean) {
+        queueEvent { glRender.enableStick(isChecked) }
+    }
+
+    fun enableBigEye(isChecked: Boolean) {
+        queueEvent { glRender.enableBigEye(isChecked) }
+    }
+
+    fun enableBeauty(isChecked: Boolean) {
+        queueEvent { glRender.enableBeauty(isChecked) }
+    }
+
+    fun setOnRecordListener(onRecordListener: OnRecordListener?) {
+        this.onRecordListener = onRecordListener
+        glRender.setOnRecordListener(onRecordListener)
+    }
+
+    init {
+
+        //设置EGL 版本
+        setEGLContextClientVersion(2)
+        glRender = MyRenderer(this)
+        setRenderer(glRender)
+        //手动渲染模式
+        renderMode = RENDERMODE_WHEN_DIRTY
+    }
+}
