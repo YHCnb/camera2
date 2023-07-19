@@ -1,22 +1,205 @@
-import android.opengl.GLES10.*
-import android.opengl.GLSurfaceView
-import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.opengles.GL10
+class MyRenderer (glRenderView: GlRenderView): GLSurfaceView.Renderer,
+    SurfaceTexture.OnFrameAvailableListener, Camera2Helper.OnPreviewSizeListener,
+    Camera2Helper.OnPreviewListener {
+    private val TAG = "GlRenderWrapper"
+    private var glRenderView: GlRenderView? = null
+    private var camera2Helper: Camera2Helper? = null
+    private lateinit var mTextures: IntArray
+    private var surfaceTexture: SurfaceTexture? = null
+    private val mtx = FloatArray(16)
+    private var screenFilter: ScreenFilter? = null
+    private var cameraFilter: CameraFilter? = null
+    private var mPreviewWdith = 0
+    private var mPreviewHeight = 0
+    private val avcRecorder: AvcRecorder? = null
+    private var tracker: FaceTracker? = null
+    private var bigeyeFilter: BigEyeFilter? = null
+    private var stickerFilter: StickerFilter? = null
+    private var beaytyFilter: BeautifyFilter? = null
+    private var onRecordListener: OnRecordListener? = null
+    private var screenSurfaceWid = 0
+    private var screenSurfaceHeight = 0
+    private var screenX = 0
+    private var screenY = 0
+    private var stickEnable = false
+    private var bigEyeEnable = false
+    private var beautyEnable = false
 
-class MyRenderer:GLSurfaceView.Renderer{
+    init{
+        this.glRenderView = glRenderView
+        val context = glRenderView.context
+
+        //拷贝 脸、眼部模型 TODO
+//        OpenGlUtils.copyAssets2SdCard(
+//            context, "lbpcascade_frontalface_improved.xml",
+//            "/sdcard/lbpcascade_frontalface.xml"
+//        )
+//        OpenGlUtils.copyAssets2SdCard(
+//            context, "seeta_fa_v1.1.bin",
+//            "/sdcard/seeta_fa_v1.1.bin"
+//        )
+    }
+
     //当Surface创建后会调用此方法
-    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-        glClearColor(1.0f,0.0f,0.0f,0.0f);//清空屏幕的颜色，本例为红色
+    override fun onSurfaceCreated(gl: GL10?, config: javax.microedition.khronos.egl.EGLConfig?) {
+        // 初始化OpenGL ES
+        camera2Helper = Camera2Helper(glRenderView!!.context as Activity)
+
+        mTextures = IntArray(1)
+        //创建一个纹理
+        GLES20.glGenTextures(mTextures.size, mTextures, 0)
+        //将纹理和离屏buffer绑定
+        surfaceTexture = SurfaceTexture(mTextures[0])
+        //监听有新图像到来
+        surfaceTexture!!.setOnFrameAvailableListener(this)
+
+        //使用fbo 将samplerExternalOES 输入到sampler2D中
+        cameraFilter = CameraFilter(glRenderView!!.context)
+        //负责将图像绘制到屏幕上
+        screenFilter = ScreenFilter(glRenderView!!.context)
+    }
+
+    //有新图像便会执行
+    override fun onFrameAvailable(surfaceTexture: SurfaceTexture?) {
+        glRenderView!!.requestRender()
     }
 
     //当Surface创建成功或尺寸改变时都调用此方法
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
-        glViewport(0,0,width,height);
+        // 设置OpenGL ES视口
+        camera2Helper!!.setPreviewSizeListener(this)
+        camera2Helper!!.setOnPreviewListener(this)
+        //打开相机
+        camera2Helper!!.openCamera(width, height, surfaceTexture)
+
+
+
+        val scaleX = mPreviewHeight.toFloat() / width.toFloat()
+        val scaleY = mPreviewWdith.toFloat() / height.toFloat()
+
+        val max = max(scaleX, scaleY);
+
+        screenSurfaceWid = (mPreviewHeight / max).toInt()
+        screenSurfaceHeight =(mPreviewWdith / max).toInt()
+        screenX = width - (mPreviewHeight / max).toInt()
+        screenY = height - (mPreviewWdith / max).toInt()
+
+        //prepare 传如 绘制到屏幕上的宽 高 起始点的X坐标 起使点的Y坐标
+        cameraFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
+        screenFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
     }
 
     //每绘制一帧都会调用此方法
     override fun onDrawFrame(gl: GL10?) {
-        //清空颜色缓冲区，然后使用glClearColor()方法设置填充屏幕的颜色
-        glClear(GL_COLOR_BUFFER_BIT);
+        var textureId:Int
+        // 配置屏幕
+        //清理屏幕 :告诉opengl 需要把屏幕清理成什么颜色
+        GLES20.glClearColor(0.0f,0.0f,0.0f,0.0f)
+        //执行上一个：glClearColor配置的屏幕颜色
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+
+        //更新获取一张图
+        surfaceTexture!!.updateTexImage()
+        // 在此处绘制预览数据
+        if (surfaceTexture != null) {
+            // 更新SurfaceTexture，并在纹理上绘制
+            surfaceTexture!!.updateTexImage()
+
+            // 渲染预览纹理
+            surfaceTexture!!.getTransformMatrix(mtx)
+            //cameraFiler需要一个矩阵，是Surface和我们手机屏幕的一个坐标之间的关系
+            cameraFilter!!.setMatrix(mtx);
+
+            //获取相机的纹理 到surfaceTexture
+            textureId = cameraFilter!!.onDrawFrame(mTextures[0])
+            if (bigEyeEnable) {
+                bigeyeFilter!!.setFace(tracker!!.mFace)
+                textureId = bigeyeFilter!!.onDrawFrame(textureId)
+            }
+
+            if (beautyEnable) {
+                textureId = beaytyFilter!!.onDrawFrame(textureId)
+            }
+
+            if (stickEnable) {
+                stickerFilter!!.setFace(tracker!!.mFace)
+                textureId = stickerFilter!!.onDrawFrame(textureId)
+            }
+
+
+            val id = screenFilter!!.onDrawFrame(textureId)
+
+
+            //进行录制
+//            avcRecorder!!.encodeFrame(id, surfaceTexture!!.getTimestamp())
+        }
+    }
+
+
+    fun onSurfaceDestory() {
+        if (camera2Helper != null) {
+            camera2Helper!!.closeCamera()
+            camera2Helper!!.setPreviewSizeListener(null)
+        }
+        cameraFilter?.release()
+        screenFilter?.release()
+        tracker!!.stopTrack()
+        tracker = null
+    }
+
+    override fun onSize(width: Int, height: Int) {
+        mPreviewWdith = width
+        mPreviewHeight = height
+        Log.e("AAA", "mPreviewWdith:$mPreviewWdith")
+        Log.e("AAA", "mPreviewHeight:$mPreviewHeight")
+    }
+
+    fun startRecord(speed: Float, path: String?) {
+        avcRecorder!!.start(speed, path)
+    }
+
+    fun stopRecord() {
+        avcRecorder!!.stop()
+    }
+
+    override fun onPreviewFrame(data: ByteArray?, len: Int) {
+        if (tracker != null && (stickEnable || bigEyeEnable)) tracker!!.detector(data)
+    }
+
+    fun setOnRecordListener(onRecordListener: OnRecordListener?) {
+        this.onRecordListener = onRecordListener
+    }
+
+    fun enableStick(isChecked: Boolean) {
+        stickEnable = isChecked
+        if (isChecked) {
+            stickerFilter = StickerFilter(glRenderView!!.context)
+            stickerFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
+        } else {
+            stickerFilter!!.release()
+            stickerFilter = null
+        }
+    }
+
+    fun enableBigEye(isChecked: Boolean) {
+        bigEyeEnable = isChecked
+        if (isChecked) {
+            bigeyeFilter = BigEyeFilter(glRenderView!!.context)
+            bigeyeFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
+        } else {
+            bigeyeFilter!!.release()
+            bigeyeFilter = null
+        }
+    }
+
+    fun enableBeauty(isChecked: Boolean) {
+        beautyEnable = isChecked
+        if (isChecked) {
+            beaytyFilter = BeautifyFilter(glRenderView!!.context)
+            beaytyFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
+        } else {
+            beaytyFilter!!.release()
+            beaytyFilter = null
+        }
     }
 }
