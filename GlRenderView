@@ -8,7 +8,8 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
         MODE_EXTRA_SLOW, MODE_SLOW, MODE_NORMAL, MODE_FAST, MODE_EXTRA_FAST
     }
 
-    private val glRender: MyRenderer
+    private lateinit var glRender: MyRenderer
+
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         super.surfaceDestroyed(holder)
         glRender.onSurfaceDestory()
@@ -59,8 +60,6 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
 
         //设置EGL 版本
         setEGLContextClientVersion(2)
-        glRender = MyRenderer(this)
-        setRenderer(glRender)
         //手动渲染模式
         renderMode = RENDERMODE_WHEN_DIRTY
     }
