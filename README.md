@@ -13,19 +13,6 @@ class CameraFragment2: Fragment(), OnRecordListener {
         Navigation.findNavController(requireActivity(), R.id.fragment_container)
     }
 
-    /** Performs recording animation of flashing screen 拍摄时动画效果 */
-    private val animationTask: Runnable by lazy {
-        Runnable {
-            // Flash white animation
-            fragmentCameraBinding.overlay.background = Color.argb(150, 255, 255, 255).toDrawable()
-            // Wait for ANIMATION_FAST_MILLIS
-            fragmentCameraBinding.overlay.postDelayed({
-                // Remove white flash animation
-                fragmentCameraBinding.overlay.background = null
-            }, CameraActivity.ANIMATION_FAST_MILLIS)
-        }
-    }
-
     /** 支持的awb模式,以及目前的模式 */
     private val awbModes = ArrayList<Int>()
     private var currentAWB = -1
@@ -43,6 +30,19 @@ class CameraFragment2: Fragment(), OnRecordListener {
     /** 使用cameraSurfaceTexture初始化Surface */
     private lateinit var previewSurface: Surface
 
+    /** Performs recording animation of flashing screen 拍摄时动画效果 */
+    private val animationTask: Runnable by lazy {
+        Runnable {
+            // Flash white animation
+            fragmentCameraBinding.overlay.background = Color.argb(150, 255, 255, 255).toDrawable()
+            // Wait for ANIMATION_FAST_MILLIS
+            fragmentCameraBinding.overlay.postDelayed({
+                // Remove white flash animation
+                fragmentCameraBinding.overlay.background = null
+            }, CameraActivity.ANIMATION_FAST_MILLIS)
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -55,22 +55,47 @@ class CameraFragment2: Fragment(), OnRecordListener {
     @SuppressLint("MissingPermission")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        val cameraHelper = CameraHelper(requireContext())
         glRenderView = fragmentCameraBinding.renderView!!
+        val myRenderer = MyRenderer(glRenderView,cameraHelper)
 
+        glRenderView.setRenderer(myRenderer)
         glRenderView.setOnRecordListener(this)
-        val glRender = MyRenderer(glRenderView)
-        glRenderView.setRenderer(glRender)
-
-        val cameraHelper = CameraHelper(glRenderView.context as Activity)
-        // 设置OpenGL ES视口
-        cameraHelper.setPreviewSizeListener(glRender)
-        cameraHelper.setOnPreviewListener(glRender)
-        cameraHelper.initial(args.cameraId,args.pixelFormat)
 
         fragmentCameraBinding.captureButton.setOnApplyWindowInsetsListener { v, insets ->
             v.translationX = (-insets.systemWindowInsetRight).toFloat()
             v.translationY = (-insets.systemWindowInsetBottom).toFloat()
             insets.consumeSystemWindowInsets()
+        }
+
+        //获取所有支持的AWB模式
+        awbModes.addAll(characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES)!!.asList())
+        if (currentAWB == -1) {
+            currentAWB = awbModes[0]
+            currentAWBIdx = 0
+            fragmentCameraBinding.switchButton!!.text = LableLib.getAWBLabel(currentAWB)
+        }
+        //切换相机模式
+        fragmentCameraBinding.switchButton!!.setOnClickListener { v ->
+            if (v.id == R.id.switch_button) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    currentAWBIdx = (currentAWBIdx + 1) % awbModes.size
+                    currentAWB = awbModes[currentAWBIdx]
+                    requireActivity().runOnUiThread {
+                        fragmentCameraBinding.switchButton!!.text = LableLib.getAWBLabel(currentAWB)
+                        restartPreview = true
+                    }
+                    try {
+//                        cameraCaptureSession.stopRepeating()
+//                        //会触发session的closed，重建preview
+//                        cameraCaptureSession.close()
+//                        previewRequest()    //直接重发request
+                    } catch (e: Exception) {
+                        Log.e(CameraFragment.TAG, "Camera failure when closing camera extension")
+                    }
+                }
+            }
         }
     }
 
