@@ -1,5 +1,6 @@
 class GlRenderView @JvmOverloads constructor(context: Context?, attrs: AttributeSet? = null) :
     GLSurfaceView(context, attrs) {
+    private val TAG = "GlRenderView"
     private var mSpeed = Speed.MODE_NORMAL
     private var savePath: String? = null
     private var onRecordListener: OnRecordListener? = null
@@ -9,6 +10,18 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
     }
 
     private lateinit var glRender: MyRenderer
+
+    init {
+        //设置EGL 版本
+        setEGLContextClientVersion(2)
+        //手动渲染模式
+        renderMode = RENDERMODE_WHEN_DIRTY
+    }
+
+    override fun setRenderer(renderer: Renderer?) {
+        glRender = renderer as MyRenderer
+        super.setRenderer(renderer)
+    }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         super.surfaceDestroyed(holder)
@@ -52,15 +65,11 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
     }
 
     fun setOnRecordListener(onRecordListener: OnRecordListener?) {
+        if(!this::glRender.isInitialized){
+            Log.d(TAG, "glRender has not been Initialized")
+            return
+        }
         this.onRecordListener = onRecordListener
         glRender.setOnRecordListener(onRecordListener)
-    }
-
-    init {
-
-        //设置EGL 版本
-        setEGLContextClientVersion(2)
-        //手动渲染模式
-        renderMode = RENDERMODE_WHEN_DIRTY
     }
 }
