@@ -1,10 +1,9 @@
-class MyRenderer (glRenderView: GlRenderView): GLSurfaceView.Renderer,
-    SurfaceTexture.OnFrameAvailableListener, Camera2Helper.OnPreviewSizeListener,
-    Camera2Helper.OnPreviewListener, CameraHelper.OnPreviewSizeListener,
+class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSurfaceView.Renderer,
+    SurfaceTexture.OnFrameAvailableListener, CameraHelper.OnPreviewSizeListener,
     CameraHelper.OnPreviewListener {
     private val TAG = "GlRenderWrapper"
     private var glRenderView: GlRenderView? = null
-    private var cameraHelper: CameraHelper? = null
+    private var cameraHelper: CameraHelper? = mCameraHelper
     private lateinit var mTextures: IntArray
     private var surfaceTexture: SurfaceTexture? = null
     private val mtx = FloatArray(16)
@@ -68,8 +67,8 @@ class MyRenderer (glRenderView: GlRenderView): GLSurfaceView.Renderer,
     //当Surface创建成功或尺寸改变时都调用此方法
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         // 设置OpenGL ES视口
-//        cameraHelper!!.setPreviewSizeListener(this)
-//        cameraHelper!!.setOnPreviewListener(this)
+        cameraHelper!!.setPreviewSizeListener(this)
+        cameraHelper!!.setOnPreviewListener(this)
         //打开相机
         cameraHelper!!.openCamera(surfaceTexture!!)
 
@@ -124,7 +123,7 @@ class MyRenderer (glRenderView: GlRenderView): GLSurfaceView.Renderer,
 
             val id = screenFilter!!.onDrawFrame(textureId)
             //进行录制
-            avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
+//            avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
         }
     }
 
