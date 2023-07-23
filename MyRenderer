@@ -43,7 +43,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     //当Surface创建后会调用此方法
     override fun onSurfaceCreated(gl: GL10?, config: javax.microedition.khronos.egl.EGLConfig?) {
         // 初始化OpenGL ES
-        cameraHelper = CameraHelper(glRenderView!!.context as Activity)
+//        cameraHelper = CameraHelper(glRenderView!!.context as Activity)
 
         mTextures = IntArray(1)
         //创建一个纹理
@@ -70,7 +70,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         cameraHelper!!.setPreviewSizeListener(this)
         cameraHelper!!.setOnPreviewListener(this)
         //打开相机
-        cameraHelper!!.openCamera(surfaceTexture!!)
+        cameraHelper!!.openCamera(surfaceTexture!!,width,height)
 
         val scaleX = mPreviewHeight.toFloat() / width.toFloat()
         val scaleY = mPreviewWdith.toFloat() / height.toFloat()
