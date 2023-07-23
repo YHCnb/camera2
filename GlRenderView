@@ -14,13 +14,12 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
     init {
         //设置EGL 版本
         setEGLContextClientVersion(2)
-        //手动渲染模式
-        renderMode = RENDERMODE_WHEN_DIRTY
     }
 
     override fun setRenderer(renderer: Renderer?) {
-        glRender = renderer as MyRenderer
         super.setRenderer(renderer)
+        glRender = renderer as MyRenderer
+        renderMode = RENDERMODE_WHEN_DIRTY //手动渲染模式
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
