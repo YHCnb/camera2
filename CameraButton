@@ -1,0 +1,68 @@
+class CameraButton @kotlin.jvm.JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null
+) :androidx.appcompat.widget.AppCompatButton(context, attrs) {
+
+    enum class CaptureMode{
+        PHOTO,VIDEO
+    }
+
+    private var captureMode = CaptureMode.PHOTO
+
+    private var isRecording = false
+
+    var recordListener: OnRecordListener? = null
+    var captureListener: OnCapturedListener? = null
+
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (recordListener == null || captureListener == null) {
+            return false
+        }
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                isPressed = true
+                if (captureMode==CaptureMode.PHOTO){
+                    captureListener!!.onCapture()
+                }else{
+                    if (isRecording){
+                        recordListener!!.onRecordStop()
+                    }else{
+                        recordListener!!.onRecordStart()
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL -> {
+                if (captureMode==CaptureMode.PHOTO || !isRecording){
+                    isPressed = false
+                }
+            }
+        }
+        return true
+    }
+
+    fun setCaptureMode(mode:CaptureMode){
+        captureMode = mode
+        if (mode==CaptureMode.VIDEO){
+            isRecording = false
+        }
+    }
+
+    fun setOnCapturedListener(listener: OnCapturedListener?) {
+        captureListener = listener
+    }
+
+    fun setOnRecordListener(listener: OnRecordListener?) {
+        recordListener = listener
+    }
+
+    interface OnCapturedListener {
+        fun onCapture()
+    }
+
+    interface OnRecordListener {
+        fun onRecordStart()
+        fun onRecordStop()
+    }
+}
