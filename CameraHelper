@@ -551,6 +551,5 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
             }
         }
     }
-
 }
 
