@@ -11,7 +11,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     private var cameraFilter: CameraFilter? = null
     private var mPreviewWdith = 0
     private var mPreviewHeight = 0
-    private val avcRecorder: AvcRecorder? = null
+    private var avcRecorder: AvcRecorder? = null
     private var tracker: FaceTracker? = null
     private var bigeyeFilter: BigEyeFilter? = null
     private var stickerFilter: StickerFilter? = null
@@ -69,8 +69,14 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         // 设置OpenGL ES视口
         cameraHelper!!.setPreviewSizeListener(this)
         cameraHelper!!.setOnPreviewListener(this)
-        //打开相机
+        //打开相机 和追踪器
         cameraHelper!!.openCamera(surfaceTexture!!,width,height)
+        tracker = FaceTracker(
+            "/sdcard/lbpcascade_frontalface.xml",
+            "/sdcard/seeta_fa_v1.1.bin",
+            cameraHelper
+        )
+        tracker!!.startTrack()
 
         val scaleX = mPreviewHeight.toFloat() / width.toFloat()
         val scaleY = mPreviewWdith.toFloat() / height.toFloat()
@@ -84,6 +90,10 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         //prepare 传如 绘制到屏幕上的宽 高 起始点的X坐标 起使点的Y坐标
         cameraFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
         screenFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
+
+        val eglContext = EGL14.eglGetCurrentContext()
+        avcRecorder = AvcRecorder(glRenderView!!.context, mPreviewHeight, mPreviewWdith, eglContext)
+        avcRecorder!!.setOnRecordListener(onRecordListener)
     }
 
     //每绘制一帧都会调用此方法
@@ -123,7 +133,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
 
             val id = screenFilter!!.onDrawFrame(textureId)
             //进行录制
-//            avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
+            avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
         }
     }
 
