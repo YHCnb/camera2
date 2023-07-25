@@ -1,7 +1,7 @@
 class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSurfaceView.Renderer,
     SurfaceTexture.OnFrameAvailableListener, CameraHelper.OnPreviewSizeListener,
     CameraHelper.OnPreviewListener {
-    private val TAG = "GlRenderWrapper"
+    private val TAG = "MyRenderer"
     private var glRenderView: GlRenderView? = null
     private var cameraHelper: CameraHelper? = mCameraHelper
     private lateinit var mTextures: IntArray
@@ -25,19 +25,28 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     private var bigEyeEnable = false
     private var beautyEnable = false
 
+    //亮度
+    private var brightness = 0.0f
+    //对比度
+    private var contrast = 0.0f
+    //饱和度
+    private var saturation = 0.0f
+
     init{
         this.glRenderView = glRenderView
-//        val context = glRenderView.context
+        val context = glRenderView.context
 
+
+        val sdcardDir = Environment.getExternalStorageDirectory().path
         //拷贝 脸、眼部模型 TODO
-//        OpenGlUtils.copyAssets2SdCard(
-//            context, "lbpcascade_frontalface_improved.xml",
-//            "/sdcard/lbpcascade_frontalface.xml"
-//        )
-//        OpenGlUtils.copyAssets2SdCard(
-//            context, "seeta_fa_v1.1.bin",
-//            "/sdcard/seeta_fa_v1.1.bin"
-//        )
+        OpenGlUtils.copyAssets2SdCard(
+            context, "lbpcascade_frontalface_improved.xml",
+            "$sdcardDir/lbpcascade_frontalface.xml"
+        )
+        OpenGlUtils.copyAssets2SdCard(
+            context, "seeta_fa_v1.1.bin",
+            "$sdcardDir/seeta_fa_v1.1.bin"
+        )
     }
 
     //当Surface创建后会调用此方法
@@ -71,9 +80,10 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         cameraHelper!!.setOnPreviewListener(this)
         //打开相机 和追踪器
         cameraHelper!!.openCamera(surfaceTexture!!,width,height)
+        val sdcardDir = Environment.getExternalStorageDirectory().path
         tracker = FaceTracker(
-            "/sdcard/lbpcascade_frontalface.xml",
-            "/sdcard/seeta_fa_v1.1.bin",
+            "$sdcardDir/lbpcascade_frontalface.xml",
+            "$sdcardDir/seeta_fa_v1.1.bin",
             cameraHelper
         )
         tracker!!.startTrack()
@@ -135,6 +145,8 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
             //进行录制
             avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
         }
+        val mBrightnessHandle = GLES20.glGetUniformLocation(mTextures[0], "brightness");
+        GLES20.glUniform1f(mBrightnessHandle, 0.0f)
     }
 
 
