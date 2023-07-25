@@ -13,9 +13,6 @@ class CameraFragment :Fragment(), OnRecordListener {
         Navigation.findNavController(requireActivity(), R.id.fragment_container)
     }
 
-    /** Flag whether we should restart preview after an extension switch. */
-    private var restartPreview = false
-
     /** GlRenderView  */
     private lateinit var glRenderView: GlRenderView
     /** CameraHelper */
@@ -34,12 +31,6 @@ class CameraFragment :Fragment(), OnRecordListener {
         }
     }
 
-    enum class CaptureMode{
-        PHOTO,VIDEO
-    }
-
-    private var captureMode = CaptureMode.PHOTO
-
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -52,23 +43,15 @@ class CameraFragment :Fragment(), OnRecordListener {
     @SuppressLint("MissingPermission")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
+        //初始化
         cameraHelper = CameraHelper(requireContext(),requireActivity())
         glRenderView = fragmentCameraBinding.renderView!!
-        val myRenderer = MyRenderer(glRenderView,cameraHelper)
 
+        val myRenderer = MyRenderer(glRenderView,cameraHelper)
         glRenderView.setRenderer(myRenderer)
         glRenderView.setOnRecordListener(this)
 
-        fragmentCameraBinding.captureButton.setOnApplyWindowInsetsListener { v, insets ->
-            v.translationX = (-insets.systemWindowInsetRight).toFloat()
-            v.translationY = (-insets.systemWindowInsetBottom).toFloat()
-            insets.consumeSystemWindowInsets()
-        }
-
-        requireActivity().runOnUiThread{
-            fragmentCameraBinding.switchButton!!.text = LableLib.getAWBLabel(cameraHelper.getCurrentAWB())
-        }
+        //一些功能按钮
         fragmentCameraBinding.apply {
             beauty!!.setOnClickListener{
                 glRenderView.enableBeauty(beauty.isChecked)
@@ -77,13 +60,13 @@ class CameraFragment :Fragment(), OnRecordListener {
                 glRenderView.enableBigEye(bigEye.isChecked)
             }
             stick!!.setOnClickListener {
-                glRenderView.enableBigEye(stick.isChecked)
+                glRenderView.enableStick(stick.isChecked)
             }
             captureModeSwitch!!.setOnClickListener {
-                captureMode = if (captureModeSwitch.isChecked){
-                    CaptureMode.VIDEO
+                if (captureModeSwitch.isChecked){
+                    cameraButton!!.setCaptureMode(CameraButton.CaptureMode.VIDEO)
                 }else{
-                    CaptureMode.PHOTO
+                    cameraButton!!.setCaptureMode(CameraButton.CaptureMode.PHOTO)
                 }
             }
             rgSpeed!!.forEachIndexed { id,view ->
@@ -93,6 +76,9 @@ class CameraFragment :Fragment(), OnRecordListener {
             }
         }
         //切换相机白平衡模式按钮
+        requireActivity().runOnUiThread{
+            fragmentCameraBinding.switchButton!!.text = LableLib.getAWBLabel(cameraHelper.getCurrentAWB())
+        }
         fragmentCameraBinding.switchButton!!.setOnClickListener { v ->
             if (v.id == R.id.switch_button) {
                 requireActivity().runOnUiThread{
@@ -102,13 +88,47 @@ class CameraFragment :Fragment(), OnRecordListener {
             }
         }
         //拍摄按钮
-        fragmentCameraBinding.cameraButton!!.setOnCapturedListener(CameraButton.OnCapturedListener(){
-            override fun onCapture(){
-                if (captureMode==CaptureMode.PHOTO){
+        fragmentCameraBinding.cameraButton!!.setOnApplyWindowInsetsListener { v, insets ->
+            v.translationX = (-insets.systemWindowInsetRight).toFloat()
+            v.translationY = (-insets.systemWindowInsetBottom).toFloat()
+            insets.consumeSystemWindowInsets()
+        }
+        //录制
+        fragmentCameraBinding.cameraButton!!.setOnRecordListener(
+            object : CameraButton.OnRecordListener{
+                override fun onRecordStart() {
+                    try {
+                        val sdf = SimpleDateFormat("yyyyMMddHHmmss")
+                        val file: File = FileUtil.createFile(
+                            context, false, "opengl",
+                            sdf.format(Date(System.currentTimeMillis())) + ".mp4", 1074000000
+                        )
+                        glRenderView.setSavePath(file.absolutePath)
+                        glRenderView.startRecord()
+                    } catch (e: FileUtil.NoExternalStoragePermissionException) {
+                        e.printStackTrace()
+                    } catch (e: FileUtil.NoExternalStorageMountedException) {
+                        e.printStackTrace()
+                    } catch (e: FileUtil.DirHasNoFreeSpaceException) {
+                        e.printStackTrace()
+                    } catch (e: IOException) {
+                        e.printStackTrace()
+                    }
+                }
+
+                override fun onRecordStop() {
+                    glRenderView.stopRecord()
+                }
+            }
+        )
+        //拍照
+        fragmentCameraBinding.cameraButton!!.setOnCapturedListener(
+            object : CameraButton.OnCapturedListener {
+                override fun onCapture() {
                     // 先禁止，防止短时间重复请求
-                    it.isEnabled = false
+                    fragmentCameraBinding.cameraButton!!.isEnabled = false
                     glRenderView.post(animationTask)
-                    // Perform I/O heavy operations in a different scope
+
                     lifecycleScope.launch(Dispatchers.IO) {
                         cameraHelper.takePhoto().use { result ->
                             Log.d(TAG, "Result received: $result")
@@ -139,13 +159,11 @@ class CameraFragment :Fragment(), OnRecordListener {
                         }
 
                         // Re-enable click listener after photo is taken
-                        it.post { it.isEnabled = true }
+                        fragmentCameraBinding.cameraButton!!.post { fragmentCameraBinding.cameraButton!!.isEnabled = true }
                     }
-                }else{
-                    glRenderView.startRecord()
                 }
             }
-        })
+        )
     }
 
     /** 保存图片 Helper function used to save a [CombinedCaptureResult] into a [File] */
@@ -168,7 +186,7 @@ class CameraFragment :Fragment(), OnRecordListener {
 
             // When the format is RAW we use the DngCreator utility library
             ImageFormat.RAW_SENSOR -> {
-                val dngCreator = DngCreator(characteristics, result.metadata)
+                val dngCreator = DngCreator(cameraHelper.getCharacteristics(), result.metadata)
                 try {
                     val output = createFile(requireContext(), "dng")
                     FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
@@ -194,7 +212,9 @@ class CameraFragment :Fragment(), OnRecordListener {
     }
 
     override fun recordFinish(path: String?) {
-        TODO("Not yet implemented")
+//        val intent: Intent = Intent(this, SoulActivity::class.java)
+//        intent.putExtra("path", path)
+//        startActivity(intent)
     }
 
     companion object {
@@ -211,4 +231,3 @@ class CameraFragment :Fragment(), OnRecordListener {
         }
     }
 }
-
