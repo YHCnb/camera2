@@ -4,6 +4,7 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
     private var mSpeed = Speed.MODE_NORMAL
     private var savePath: String? = null
     private var onRecordListener: OnRecordListener? = null
+    private var onShootListener: OnShootListener? = null
 
     enum class Speed {
         MODE_EXTRA_SLOW, MODE_SLOW, MODE_NORMAL, MODE_FAST, MODE_EXTRA_FAST
@@ -24,12 +25,16 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         super.surfaceDestroyed(holder)
-        glRender.onSurfaceDestory()
+        glRender.onSurfaceDestroy()
+    }
+
+    fun shoot(path:String){
+        glRender.shoot(path)
     }
 
     fun startRecord() {
-        var speed = 1f
-        speed = when (mSpeed) {
+        val speed: Float
+        = when (mSpeed) {
             Speed.MODE_EXTRA_SLOW -> 0.3f
             Speed.MODE_SLOW -> 0.5f
             Speed.MODE_NORMAL -> 1f
@@ -41,6 +46,10 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
 
     fun stopRecord() {
         glRender.stopRecord()
+    }
+
+    fun setCameraMode(mode:CameraMode){
+        glRender.setCameraMode(mode)
     }
 
     fun setSpeed(speed: Speed) {
@@ -61,6 +70,15 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
 
     fun enableBeauty(isChecked: Boolean) {
         queueEvent { glRender.enableBeauty(isChecked) }
+    }
+
+    fun setOnShootListener(onShootListener: OnShootListener?) {
+        if(!this::glRender.isInitialized){
+            Log.d(TAG, "glRender has not been Initialized")
+            return
+        }
+        this.onShootListener = onShootListener
+        glRender.setOnShootListener(onShootListener)
     }
 
     fun setOnRecordListener(onRecordListener: OnRecordListener?) {
