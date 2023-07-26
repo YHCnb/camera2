@@ -1,4 +1,4 @@
-class CameraHelper(private val context: Context, private val activity: FragmentActivity) {
+class CameraHelper(private val context: Context) {
     private var cameraId: String = "-1"
 
     private var onPreviewSizeListener: OnPreviewSizeListener? = null
@@ -13,8 +13,6 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
 
     /** Readers used as buffers for camera still shots */
     private lateinit var imageReader: ImageReader
-    /** 将图像数据存储在队列中，待处理程序准备好后再进行处理,可以避免图像数据的丢失 */
-    val imageQueue = ArrayBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
 
     /** [HandlerThread] where all camera operations run */
     private var cameraThread: HandlerThread? = null
@@ -28,16 +26,11 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
     /** Internal reference to the ongoing [CameraCaptureSession] configured with our parameters */
     private var cameraCaptureSession: CameraCaptureSession? = null
 
-    /** Live data listener for changes in the device orientation relative to the camera 横屏与竖屏检测 */
-    private lateinit var relativeOrientation: OrientationLiveData
-
     /** 支持的awb模式,以及目前的模式 */
     private val awbModes = ArrayList<Int>()
     private var currentAWB = -1
     private var currentAWBIdx = -1
 
-    /** Flag whether we should restart preview after an extension switch. */
-    private var restartPreview = false
 
     /** SurfaceTexture  */
     private var surfaceTexture: SurfaceTexture? = null
@@ -54,7 +47,7 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
     private var maxBrightnessRange:Int =0
     private var brightness:Int = 0
     private var contrast:Int = 0
-    private var channels : Array<FloatArray?> = null
+    private var channels : Array<FloatArray?> = emptyArray()
 
 
     fun getCameraId(): Int {
@@ -183,7 +176,7 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
                 val maxPreviewHeight = context.resources.displayMetrics.heightPixels
                 val map = characteristics.get(
                     CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
-                val largest = map.getOutputSizes(PIXEL_FORMAT_PHOTO)
+                val largest = map.getOutputSizes(PIXEL_FORMAT_VIDEO)
                     .maxByOrNull { it.height * it.width }!!
                 previewSize = chooseOptimalSize(
                     map.getOutputSizes(SurfaceTexture::class.java),
@@ -194,7 +187,7 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
                 onPreviewSizeListener?.onSize(previewSize.width, previewSize.height)
                 //创建imageReader
                 imageReader = ImageReader.newInstance(
-                    previewSize.width, previewSize.height, PIXEL_FORMAT_PHOTO, IMAGE_BUFFER_SIZE
+                    previewSize.width, previewSize.height, PIXEL_FORMAT_VIDEO, IMAGE_BUFFER_SIZE
                 )
                 //录像
                 imageReader.setOnImageAvailableListener(
@@ -243,11 +236,6 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
                                 CaptureRequest.CONTROL_AWB_MODE,
                                 currentAWB
                             )
-                            // TODO
-                            previewRequestBuilder!!.set(
-                                CaptureRequest.COLOR_CORRECTION_MODE,
-                                CaptureRequest.COLOR_CORRECTION_MODE_TRANSFORM_MATRIX
-                            )
                             //降噪算法操作模式
                             previewRequestBuilder!!.set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST)
                             // 亮度修改
@@ -266,13 +254,8 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
                                 }
                             }
                             setContrast(contrast)
-
-
-                            previewRequest = previewRequestBuilder!!.build()
-                            cameraCaptureSession!!.setRepeatingRequest(
-                                previewRequest!!,
-                                captureCallbackVideo, cameraHandler
-                            )
+                            //TODO 多次build怎么改
+                            buildRequest()
                         } catch (e: CameraAccessException) {
                             e.printStackTrace()
                         }
@@ -289,23 +272,14 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
         }
     }
 
-    /** [CameraCaptureSession.CaptureCallback] 录像模式不做处理，为空*/
-    private val captureCallbackVideo: CameraCaptureSession.CaptureCallback =
-        object : CameraCaptureSession.CaptureCallback() {
-            override fun onCaptureProgressed(
-                session: CameraCaptureSession,
-                request: CaptureRequest,
-                partialResult: CaptureResult
-            ) {
-            }
-
-            override fun onCaptureCompleted(
-                session: CameraCaptureSession,
-                request: CaptureRequest,
-                result: TotalCaptureResult
-            ) {
-            }
-        }
+    /** 用于发送cameraCaptureSession的request，在 第一次构建 或者 参数修改后 调用 */
+    fun buildRequest(){
+        previewRequest = previewRequestBuilder!!.build()
+        cameraCaptureSession!!.setRepeatingRequest(
+            previewRequest!!,
+            null, cameraHandler
+        )
+    }
 
     /** 处理YUV格式图像，并传给onPreviewListener用于人脸检测 */
     private val onImageAvailableListener = ImageReader.OnImageAvailableListener { reader ->
@@ -371,16 +345,18 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
     }
 
     fun setBrightness(value: Int){
-        val brightnessValue = (minBrightnessRange + (maxBrightnessRange - minBrightnessRange) * (brightness / 100f)).toInt()
+        this.brightness = value
+        val brightnessValue = (minBrightnessRange + (maxBrightnessRange - minBrightnessRange) * (value / 100f)).toInt()
         previewRequestBuilder!!.set(
             CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION,
             brightnessValue
         )
-        // TODO 重新请求过
+        buildRequest()
     }
 
     fun setContrast(value:Int){
-        if (channels == null || contrast > 100 || contrast < 0) {
+        this.contrast = value
+        if (channels == null || value > 100 || value < 0) {
             return
         }
 
@@ -401,7 +377,37 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
             newValues[TonemapCurve.CHANNEL_GREEN],
             newValues[TonemapCurve.CHANNEL_BLUE]
         )
-        previewRequestBuilder!!.set(CaptureRequest.TONEMAP_CURVE, tc)
+        previewRequestBuilder!!.set(
+            CaptureRequest.TONEMAP_CURVE,
+            tc
+        )
+        buildRequest()
+    }
+
+    fun switchAWB(){
+        currentAWBIdx = (currentAWBIdx + 1) % awbModes.size
+        currentAWB = awbModes[currentAWBIdx]
+        previewRequestBuilder!!.set(
+            CaptureRequest.CONTROL_AWB_MODE,
+            currentAWB
+        )
+        buildRequest()
+    }
+
+    fun getCurrentAWB(): Int {
+        return currentAWB
+    }
+
+    fun getBrightness(): Int{
+        return brightness
+    }
+
+    fun getContrast(): Int{
+        return contrast
+    }
+
+    fun getCharacteristics(): CameraCharacteristics {
+        return characteristics
     }
 
     fun setPreviewSizeListener(onPreviewSizeListener: OnPreviewSizeListener?) {
@@ -410,30 +416,6 @@ class CameraHelper(private val context: Context, private val activity: FragmentA
 
     fun setOnPreviewListener(onPreviewListener: OnPreviewListener?) {
         this.onPreviewListener = onPreviewListener
-    }
-
-    fun switchAWB(){
-        println(awbModes.size)
-        currentAWBIdx = (currentAWBIdx + 1) % awbModes.size
-        currentAWB = awbModes[currentAWBIdx]
-        previewRequestBuilder!!.set(
-            CaptureRequest.CONTROL_AWB_MODE,
-            currentAWB
-        )
-        previewRequest = previewRequestBuilder!!.build()
-        cameraCaptureSession!!.setRepeatingRequest(
-            previewRequest!!,
-            captureCallbackVideo, cameraHandler
-        )
-    }
-
-    fun getCurrentAWB(): Int {
-        return currentAWB
-        characteristics
-    }
-
-    fun getCharacteristics(): CameraCharacteristics {
-        return characteristics
     }
 
     interface OnPreviewSizeListener {
