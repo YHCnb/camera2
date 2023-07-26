@@ -206,5 +206,4 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
             return File(context.filesDir, "IMG_${sdf.format(Date())}.$extension")
         }
     }
-
 }
