@@ -17,6 +17,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     private var stickerFilter: StickerFilter? = null
     private var beaytyFilter: BeautifyFilter? = null
     private var onRecordListener: OnRecordListener? = null
+    private var onShootListener: OnShootListener? = null
     private var screenSurfaceWid = 0
     private var screenSurfaceHeight = 0
     private var screenX = 0
@@ -25,12 +26,9 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     private var bigEyeEnable = false
     private var beautyEnable = false
 
-    //亮度
-    private var brightness = 0.0f
-    //对比度
-    private var contrast = 0.0f
-    //饱和度
-    private var saturation = 0.0f
+    private var cameraMode = CameraMode.PHOTO
+    private var isShooting = false
+    private var shootPath = ""
 
     init{
         this.glRenderView = glRenderView
@@ -142,15 +140,89 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
             }
 
             val id = screenFilter!!.onDrawFrame(textureId)
-            //进行录制
-            avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
+            when(cameraMode){
+                CameraMode.PHOTO->{
+                    //进行录制
+                    avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
+                }
+                CameraMode.VIDEO->{
+                    if (isShooting){
+                        //拍照并保存
+                        isShooting=false
+                        val bitmap = createBitmapFromTexture(textureId)
+                        runBlocking {
+                            saveResult(bitmap)
+                            onShootListener!!.shootFinish(shootPath)
+                        }
+                    }
+                }
+            }
         }
-        val mBrightnessHandle = GLES20.glGetUniformLocation(mTextures[0], "brightness");
-        GLES20.glUniform1f(mBrightnessHandle, 0.0f)
     }
 
+    /** 保存图片 */
+    private suspend fun saveResult(bitmap: Bitmap) {
+        try {
+            val bos = BufferedOutputStream(FileOutputStream(shootPath))
+            bitmap.compress(Bitmap.CompressFormat.JPEG,100,bos)
+            bos.flush()
+            bos.close()
+        } catch (e: FileNotFoundException) {
+            e.printStackTrace()
+        } catch (e: IOException) {
+            Log.e(TAG, "Unable to write JPEG image to file", e)
+            Files.deleteIfExists(File(shootPath).toPath())
+            e.printStackTrace()
+        }
+    }
 
-    fun onSurfaceDestory() {
+    /** 从纹理中获得Bitmap */
+    private fun createBitmapFromTexture(textureId:Int): Bitmap {
+        val frameBuffer = IntArray(1)
+        GLES20.glGenFramebuffers(1, frameBuffer, 0)
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, frameBuffer[0])
+
+        // 绑定纹理对象到FrameBuffer
+        GLES20.glFramebufferTexture2D(
+            GLES20.GL_FRAMEBUFFER,
+            GLES20.GL_COLOR_ATTACHMENT0,
+            GLES20.GL_TEXTURE_2D,
+            textureId,
+            0
+        )
+
+        val snapWidth: Int = mPreviewHeight
+        val snapHeight: Int = mPreviewWdith
+        val size: Int = snapWidth * snapHeight
+        val buf: ByteBuffer = ByteBuffer.allocateDirect(size * 4)
+        buf.order(ByteOrder.nativeOrder())
+        // 读取像素数据到buf
+        GLES20.glReadPixels(
+            0, 0, mPreviewWdith, mPreviewHeight,
+            GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE,
+            buf
+        )
+        val data = IntArray(size)
+        buf.asIntBuffer().get(data)
+
+        // 创建一个临时的Bitmap对象
+        var bitmap = Bitmap.createBitmap(snapWidth, snapHeight, Bitmap.Config.ARGB_8888)
+        bitmap.setPixels(data, size-snapWidth, -snapWidth, 0, 0, snapWidth, snapHeight)
+
+        // 翻转Bitmap
+        val matrix = Matrix()
+        matrix.preScale(1F, -1F)
+        bitmap = Bitmap.createBitmap(bitmap, 0, 0, mPreviewWdith, mPreviewHeight, matrix, false)
+
+        // 解绑FrameBuffer和纹理
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        // 释放FrameBuffer
+        GLES20.glDeleteFramebuffers(1, frameBuffer, 0)
+
+        return bitmap
+    }
+
+    fun onSurfaceDestroy() {
         if (cameraHelper != null) {
             cameraHelper!!.closeCamera()
             cameraHelper!!.setPreviewSizeListener(null)
@@ -164,8 +236,13 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     override fun onSize(width: Int, height: Int) {
         mPreviewWdith = width
         mPreviewHeight = height
-        Log.e("AAA", "mPreviewWdith:$mPreviewWdith")
-        Log.e("AAA", "mPreviewHeight:$mPreviewHeight")
+        Log.e(TAG, "mPreviewWdith:$mPreviewWdith")
+        Log.e(TAG, "mPreviewHeight:$mPreviewHeight")
+    }
+
+    fun shoot(path: String){
+        shootPath = path
+        isShooting = true
     }
 
     fun startRecord(speed: Float, path: String?) {
@@ -182,6 +259,14 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
 
     fun setOnRecordListener(onRecordListener: OnRecordListener?) {
         this.onRecordListener = onRecordListener
+    }
+
+    fun setOnShootListener(onShootListener: OnShootListener?) {
+        this.onShootListener = onShootListener
+    }
+
+    fun setCameraMode(mode: CameraMode){
+        this.cameraMode = mode
     }
 
     fun enableStick(isChecked: Boolean) {
