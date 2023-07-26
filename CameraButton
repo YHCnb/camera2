@@ -4,10 +4,7 @@ class CameraButton @kotlin.jvm.JvmOverloads constructor(
 ) :androidx.appcompat.widget.AppCompatButton(context, attrs) {
 
     /** 拍摄模式 */
-    enum class CaptureMode{
-        PHOTO,VIDEO
-    }
-    private var captureMode = CaptureMode.PHOTO
+    private var cameraMode = CameraMode.PHOTO
 
     private var isRecording = false
 
@@ -22,7 +19,7 @@ class CameraButton @kotlin.jvm.JvmOverloads constructor(
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 isPressed = true
-                if (captureMode==CaptureMode.PHOTO){
+                if (cameraMode==CameraMode.PHOTO){
                     captureListener!!.onCapture()
                 }else{
                     if (isRecording){
@@ -35,7 +32,7 @@ class CameraButton @kotlin.jvm.JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_CANCEL -> {
-                if (captureMode==CaptureMode.PHOTO || !isRecording){
+                if (cameraMode==CameraMode.PHOTO || !isRecording){
                     isPressed = false
                 }
             }
@@ -43,9 +40,9 @@ class CameraButton @kotlin.jvm.JvmOverloads constructor(
         return true
     }
 
-    fun setCaptureMode(mode:CaptureMode){
-        captureMode = mode
-        if (mode==CaptureMode.VIDEO){
+    fun setCaptureMode(mode:CameraMode){
+        cameraMode = mode
+        if (mode==CameraMode.VIDEO){
             isRecording = false
         }
     }
