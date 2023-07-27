@@ -46,7 +46,7 @@ class CameraHelper(private val context: Context) {
     private var minBrightnessRange:Int =0
     private var maxBrightnessRange:Int =0
     private var brightness:Int = 0
-    private var contrast:Int = 0
+    private var contrast:Int = 50
     private var channels : Array<FloatArray?> = emptyArray()
 
 
@@ -236,13 +236,15 @@ class CameraHelper(private val context: Context) {
                                 CaptureRequest.CONTROL_AWB_MODE,
                                 currentAWB
                             )
-                            //降噪算法操作模式
+                            // 降噪算法操作模式
                             previewRequestBuilder!!.set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST)
-                            // 亮度修改
+                            // 亮度相关参数初始化
                             minBrightnessRange = characteristics.get(CONTROL_AE_COMPENSATION_RANGE)!!.lower
                             maxBrightnessRange = characteristics.get(CONTROL_AE_COMPENSATION_RANGE)!!.upper
-                            setBrightness(brightness)
-                            // 对比度修改
+                            val absBRange: Int = maxBrightnessRange - minBrightnessRange
+                            val value = previewRequestBuilder!![CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION]!!
+                            brightness = 100 * (value - minBrightnessRange) / absBRange
+                            // 对比度相关参数初始化
                             previewRequestBuilder!!.set(CaptureRequest.TONEMAP_MODE, CaptureRequest.TONEMAP_MODE_CONTRAST_CURVE) //TONEMAP模式选择
                             val tc: TonemapCurve? = previewRequestBuilder!![CaptureRequest.TONEMAP_CURVE]
                             if (tc != null) {
@@ -253,8 +255,9 @@ class CameraHelper(private val context: Context) {
                                     channels[chanel] = array
                                 }
                             }
-                            setContrast(contrast)
-                            //TODO 多次build怎么改
+                            // request构建并执行
+                            brightnessRequest()
+                            contrastRequest()
                             buildRequest()
                         } catch (e: CameraAccessException) {
                             e.printStackTrace()
@@ -279,6 +282,94 @@ class CameraHelper(private val context: Context) {
             previewRequest!!,
             null, cameraHandler
         )
+    }
+
+    fun setBrightness(value: Int){
+        this.brightness = value
+        brightnessRequest()
+        buildRequest()
+    }
+
+    private fun brightnessRequest(){
+        val brightnessValue = (minBrightnessRange + (maxBrightnessRange - minBrightnessRange) * (brightness / 100f)).toInt()
+        previewRequestBuilder!!.set(
+            CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION,
+            brightnessValue
+        )
+    }
+
+    fun setContrast(value:Int){
+        this.contrast = value
+        contrastRequest()
+        buildRequest()
+    }
+
+    private fun contrastRequest(){
+        if (channels == null || contrast > 100 || contrast < 0) {
+            return
+        }
+        val contrast: Float =
+            1* (contrast / 100f)
+        val newValues = arrayOfNulls<FloatArray>(3)
+        for (chanel in TonemapCurve.CHANNEL_RED..TonemapCurve.CHANNEL_BLUE) {
+            val array = FloatArray(channels[chanel]!!.size)
+            System.arraycopy(channels[chanel]!!, 0, array, 0, array.size)
+            for (i in array.indices) {
+                array[i] *= contrast
+            }
+            newValues[chanel] = array
+        }
+        val tc = TonemapCurve(
+            newValues[TonemapCurve.CHANNEL_RED],
+            newValues[TonemapCurve.CHANNEL_GREEN],
+            newValues[TonemapCurve.CHANNEL_BLUE]
+        )
+        previewRequestBuilder!!.set(
+            CaptureRequest.TONEMAP_CURVE,
+            tc
+        )
+    }
+
+    fun switchAWB(){
+        currentAWBIdx = (currentAWBIdx + 1) % awbModes.size
+        currentAWB = awbModes[currentAWBIdx]
+        previewRequestBuilder!!.set(
+            CaptureRequest.CONTROL_AWB_MODE,
+            currentAWB
+        )
+        buildRequest()
+    }
+
+    fun getCurrentAWB(): Int {
+        return currentAWB
+    }
+
+    fun getBrightness(): Int{
+        return brightness
+    }
+
+    fun getContrast(): Int{
+        return contrast
+    }
+
+    fun getCharacteristics(): CameraCharacteristics {
+        return characteristics
+    }
+
+    fun setPreviewSizeListener(onPreviewSizeListener: OnPreviewSizeListener?) {
+        this.onPreviewSizeListener = onPreviewSizeListener
+    }
+
+    fun setOnPreviewListener(onPreviewListener: OnPreviewListener?) {
+        this.onPreviewListener = onPreviewListener
+    }
+
+    interface OnPreviewSizeListener {
+        fun onSize(width: Int, height: Int)
+    }
+
+    interface OnPreviewListener {
+        fun onPreviewFrame(data: ByteArray?, len: Int)
     }
 
     /** 处理YUV格式图像，并传给onPreviewListener用于人脸检测 */
@@ -344,88 +435,6 @@ class CameraHelper(private val context: Context) {
         image.close()
     }
 
-    fun setBrightness(value: Int){
-        this.brightness = value
-        val brightnessValue = (minBrightnessRange + (maxBrightnessRange - minBrightnessRange) * (value / 100f)).toInt()
-        previewRequestBuilder!!.set(
-            CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION,
-            brightnessValue
-        )
-        buildRequest()
-    }
-
-    fun setContrast(value:Int){
-        this.contrast = value
-        if (channels == null || value > 100 || value < 0) {
-            return
-        }
-
-        val contrast: Float =
-            1* (value / 100f)
-
-        val newValues = arrayOfNulls<FloatArray>(3)
-        for (chanel in TonemapCurve.CHANNEL_RED..TonemapCurve.CHANNEL_BLUE) {
-            val array = FloatArray(channels[chanel]!!.size)
-            System.arraycopy(channels[chanel]!!, 0, array, 0, array.size)
-            for (i in array.indices) {
-                array[i] *= contrast
-            }
-            newValues[chanel] = array
-        }
-        val tc = TonemapCurve(
-            newValues[TonemapCurve.CHANNEL_RED],
-            newValues[TonemapCurve.CHANNEL_GREEN],
-            newValues[TonemapCurve.CHANNEL_BLUE]
-        )
-        previewRequestBuilder!!.set(
-            CaptureRequest.TONEMAP_CURVE,
-            tc
-        )
-        buildRequest()
-    }
-
-    fun switchAWB(){
-        currentAWBIdx = (currentAWBIdx + 1) % awbModes.size
-        currentAWB = awbModes[currentAWBIdx]
-        previewRequestBuilder!!.set(
-            CaptureRequest.CONTROL_AWB_MODE,
-            currentAWB
-        )
-        buildRequest()
-    }
-
-    fun getCurrentAWB(): Int {
-        return currentAWB
-    }
-
-    fun getBrightness(): Int{
-        return brightness
-    }
-
-    fun getContrast(): Int{
-        return contrast
-    }
-
-    fun getCharacteristics(): CameraCharacteristics {
-        return characteristics
-    }
-
-    fun setPreviewSizeListener(onPreviewSizeListener: OnPreviewSizeListener?) {
-        this.onPreviewSizeListener = onPreviewSizeListener
-    }
-
-    fun setOnPreviewListener(onPreviewListener: OnPreviewListener?) {
-        this.onPreviewListener = onPreviewListener
-    }
-
-    interface OnPreviewSizeListener {
-        fun onSize(width: Int, height: Int)
-    }
-
-    interface OnPreviewListener {
-        fun onPreviewFrame(data: ByteArray?, len: Int)
-    }
-
     companion object {
         private val TAG = CameraFragment::class.java.simpleName
         /** 照片格式 */
@@ -438,17 +447,6 @@ class CameraHelper(private val context: Context) {
 
         /** Maximum time allowed to wait for the result of an image capture */
         private const val IMAGE_CAPTURE_TIMEOUT_MILLIS: Long = 5000
-
-        /** Helper data class used to hold capture metadata with their associated image */
-        data class CombinedCaptureResult(
-            val image: Image,
-            val metadata: CaptureResult,
-            val orientation: Int,
-            val format: Int
-        ) : Closeable {
-            override fun close() = image.close()
-        }
-
 
         private fun chooseOptimalSize(
             choices: Array<Size>, textureViewWidth: Int,
