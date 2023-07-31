@@ -16,6 +16,10 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     private var bigeyeFilter: BigEyeFilter? = null
     private var stickerFilter: StickerFilter? = null
     private var beaytyFilter: BeautifyFilter? = null
+    private var saturationFilter:SaturationFilter? = null
+    private var contrastFilter:ContrastFilter? = null
+    private var exposureFilter:ExposureFilter? = null
+    private var brightnessFilter:BrightnessFilter? = null
     private var onRecordListener: OnRecordListener? = null
     private var onShootListener: OnShootListener? = null
     private var screenSurfaceWid = 0
@@ -37,21 +41,18 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
 
         val sdcardDir = Environment.getExternalStorageDirectory().path
         //拷贝 脸、眼部模型 TODO
-        OpenGlUtils.copyAssets2SdCard(
-            context, "lbpcascade_frontalface_improved.xml",
-            "$sdcardDir/lbpcascade_frontalface.xml"
-        )
-        OpenGlUtils.copyAssets2SdCard(
-            context, "seeta_fa_v1.1.bin",
-            "$sdcardDir/seeta_fa_v1.1.bin"
-        )
+//        OpenGlUtils.copyAssets2SdCard(
+//            context, "lbpcascade_frontalface_improved.xml",
+//            "$sdcardDir/lbpcascade_frontalface.xml"
+//        )
+//        OpenGlUtils.copyAssets2SdCard(
+//            context, "seeta_fa_v1.1.bin",
+//            "$sdcardDir/seeta_fa_v1.1.bin"
+//        )
     }
 
     //当Surface创建后会调用此方法
     override fun onSurfaceCreated(gl: GL10?, config: javax.microedition.khronos.egl.EGLConfig?) {
-        // 初始化OpenGL ES
-//        cameraHelper = CameraHelper(glRenderView!!.context as Activity)
-
         mTextures = IntArray(1)
         //创建一个纹理
         GLES20.glGenTextures(mTextures.size, mTextures, 0)
@@ -64,6 +65,11 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         cameraFilter = CameraFilter(glRenderView!!.context)
         //负责将图像绘制到屏幕上
         screenFilter = ScreenFilter(glRenderView!!.context)
+        //负责调节饱和度,对比度
+        saturationFilter = SaturationFilter(glRenderView!!.context)
+        contrastFilter = ContrastFilter(glRenderView!!.context)
+        exposureFilter = ExposureFilter(glRenderView!!.context)
+        brightnessFilter = BrightnessFilter(glRenderView!!.context)
     }
 
     //有新图像便会执行
@@ -79,12 +85,13 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         //打开相机 和追踪器
         cameraHelper!!.openCamera(surfaceTexture!!,width,height)
         val sdcardDir = Environment.getExternalStorageDirectory().path
-        tracker = FaceTracker(
-            "$sdcardDir/lbpcascade_frontalface.xml",
-            "$sdcardDir/seeta_fa_v1.1.bin",
-            cameraHelper
-        )
-        tracker!!.startTrack()
+        // TODO
+//        tracker = FaceTracker(
+//            "$sdcardDir/lbpcascade_frontalface.xml",
+//            "$sdcardDir/seeta_fa_v1.1.bin",
+//            cameraHelper
+//        )
+//        tracker!!.startTrack()
 
         val scaleX = mPreviewHeight.toFloat() / width.toFloat()
         val scaleY = mPreviewWdith.toFloat() / height.toFloat()
@@ -98,6 +105,10 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         //prepare 传如 绘制到屏幕上的宽 高 起始点的X坐标 起使点的Y坐标
         cameraFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
         screenFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
+        saturationFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
+        contrastFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
+        exposureFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
+        brightnessFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
 
         val eglContext = EGL14.eglGetCurrentContext()
         avcRecorder = AvcRecorder(glRenderView!!.context, mPreviewHeight, mPreviewWdith, eglContext)
@@ -113,47 +124,49 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         //执行上一个：glClearColor配置的屏幕颜色
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
 
-        //更新获取一张图
+
+        // 更新SurfaceTexture，并在纹理上绘制
         surfaceTexture!!.updateTexImage()
-        // 在此处绘制预览数据
-        if (surfaceTexture != null) {
-            // 更新SurfaceTexture，并在纹理上绘制
-            surfaceTexture!!.updateTexImage()
+        // 渲染预览纹理
+        surfaceTexture!!.getTransformMatrix(mtx)
+        //cameraFiler需要一个矩阵，是Surface和我们手机屏幕的一个坐标之间的关系
+        cameraFilter!!.setMatrix(mtx)
 
-            // 渲染预览纹理
-            surfaceTexture!!.getTransformMatrix(mtx)
-            //cameraFiler需要一个矩阵，是Surface和我们手机屏幕的一个坐标之间的关系
-            cameraFilter!!.setMatrix(mtx)
+        //获取相机的纹理 到surfaceTexture
+        textureId = cameraFilter!!.onDrawFrame(mTextures[0])
 
-            //获取相机的纹理 到surfaceTexture
-            textureId = cameraFilter!!.onDrawFrame(mTextures[0])
-            if (bigEyeEnable) {
-                bigeyeFilter!!.setFace(tracker!!.mFace)
-                textureId = bigeyeFilter!!.onDrawFrame(textureId)
-            }
-            if (beautyEnable) {
-                textureId = beaytyFilter!!.onDrawFrame(textureId)
-            }
-            if (stickEnable) {
-                stickerFilter!!.setFace(tracker!!.mFace)
-                textureId = stickerFilter!!.onDrawFrame(textureId)
-            }
 
-            val id = screenFilter!!.onDrawFrame(textureId)
-            when(cameraMode){
-                CameraMode.PHOTO->{
-                    //进行录制
-                    avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
-                }
-                CameraMode.VIDEO->{
-                    if (isShooting){
-                        //拍照并保存
-                        isShooting=false
-                        val bitmap = createBitmapFromTexture(textureId)
-                        runBlocking {
-                            saveResult(bitmap)
-                            onShootListener!!.shootFinish(shootPath)
-                        }
+        textureId = saturationFilter!!.onDrawFrame(textureId)
+        textureId = contrastFilter!!.onDrawFrame(textureId)
+        textureId = exposureFilter!!.onDrawFrame(textureId)
+        textureId = brightnessFilter!!.onDrawFrame(textureId)
+
+        if (bigEyeEnable) {
+            bigeyeFilter!!.setFace(tracker!!.mFace)
+            textureId = bigeyeFilter!!.onDrawFrame(textureId)
+        }
+        if (beautyEnable) {
+            textureId = beaytyFilter!!.onDrawFrame(textureId)
+        }
+        if (stickEnable) {
+            stickerFilter!!.setFace(tracker!!.mFace)
+            textureId = stickerFilter!!.onDrawFrame(textureId)
+        }
+
+        val id = screenFilter!!.onDrawFrame(textureId)
+        when(cameraMode){
+            CameraMode.PHOTO->{
+                //进行录制
+                avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
+            }
+            CameraMode.VIDEO->{
+                if (isShooting){
+                    //拍照并保存
+                    isShooting=false
+                    val bitmap = createBitmapFromTexture(textureId)
+                    runBlocking {
+                        saveResult(bitmap)
+                        onShootListener!!.shootFinish(shootPath)
                     }
                 }
             }
@@ -267,6 +280,30 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
 
     fun setCameraMode(mode: CameraMode){
         this.cameraMode = mode
+    }
+
+    fun setSaturation(saturation:Int){
+        if (saturationFilter!=null){
+            saturationFilter!!.setSaturation(saturation)
+        }
+    }
+
+    fun setContrast(contrast:Int){
+        if (contrastFilter!=null){
+            contrastFilter!!.setContrast(contrast)
+        }
+    }
+
+    fun setExposure(exposure:Int){
+        if (exposureFilter!=null){
+            exposureFilter!!.setExposure(exposure)
+        }
+    }
+
+    fun setBrightness(brightness:Int){
+        if (brightnessFilter!=null){
+            brightnessFilter!!.setBrightness(brightness)
+        }
     }
 
     fun enableStick(isChecked: Boolean) {
