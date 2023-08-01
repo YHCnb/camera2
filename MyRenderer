@@ -41,14 +41,14 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
 
         val sdcardDir = Environment.getExternalStorageDirectory().path
         //拷贝 脸、眼部模型 TODO
-//        OpenGlUtils.copyAssets2SdCard(
-//            context, "lbpcascade_frontalface_improved.xml",
-//            "$sdcardDir/lbpcascade_frontalface.xml"
-//        )
-//        OpenGlUtils.copyAssets2SdCard(
-//            context, "seeta_fa_v1.1.bin",
-//            "$sdcardDir/seeta_fa_v1.1.bin"
-//        )
+        OpenGlUtils.copyAssets2SdCard(
+            context, "lbpcascade_frontalface_improved.xml",
+            "$sdcardDir/lbpcascade_frontalface.xml"
+        )
+        OpenGlUtils.copyAssets2SdCard(
+            context, "seeta_fa_v1.1.bin",
+            "$sdcardDir/seeta_fa_v1.1.bin"
+        )
     }
 
     //当Surface创建后会调用此方法
@@ -86,12 +86,12 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         cameraHelper!!.openCamera(surfaceTexture!!,width,height)
         val sdcardDir = Environment.getExternalStorageDirectory().path
         // TODO
-//        tracker = FaceTracker(
-//            "$sdcardDir/lbpcascade_frontalface.xml",
-//            "$sdcardDir/seeta_fa_v1.1.bin",
-//            cameraHelper
-//        )
-//        tracker!!.startTrack()
+        tracker = FaceTracker(
+            "$sdcardDir/lbpcascade_frontalface.xml",
+            "$sdcardDir/seeta_fa_v1.1.bin",
+            cameraHelper
+        )
+        tracker!!.startTrack()
 
         val scaleX = mPreviewHeight.toFloat() / width.toFloat()
         val scaleY = mPreviewWdith.toFloat() / height.toFloat()
