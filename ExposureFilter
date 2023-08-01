@@ -1,0 +1,44 @@
+public class ExposureFilter extends AbstractFBOFilter{
+    private final int exposureLoc;
+    private float exposure = 0.0f;
+
+    public ExposureFilter(Context mContext) {
+        super(mContext, R.raw.screen_vert, R.raw.exposure_frag);
+        exposureLoc = GLES20.glGetUniformLocation(mProgramId, "exposure");
+    }
+
+    public void setExposure(int exposure) {
+        this.exposure = (exposure-50)*0.01f;
+    }
+
+    @Override
+    public int onDrawFrame(int textureId) {
+        GLES20.glViewport(0, 0, mOutputWidth, mOutputHeight);
+
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFrameBuffers[0]);
+
+        GLES20.glUseProgram(mProgramId);
+
+        mGlVertexBuffer.position(0);
+        GLES20.glVertexAttribPointer(vPosition, 2, GLES20.GL_FLOAT, false, 0, mGlVertexBuffer);
+        GLES20.glEnableVertexAttribArray(vPosition);
+
+        mGlTextureBuffer.position(0);
+        GLES20.glVertexAttribPointer(vCoord, 2, GLES20.GL_FLOAT, false, 0, mGlTextureBuffer);
+        GLES20.glEnableVertexAttribArray(vCoord);
+
+
+        //传递曝光度
+        GLES20.glUniform1f(exposureLoc, exposure);
+
+
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId);
+        GLES20.glUniform1i(vTexture, 0);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+
+        return mFBOTextures[0];
+    }
+}
