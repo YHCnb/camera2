@@ -50,6 +50,7 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
         val myRenderer = MyRenderer(glRenderView,cameraHelper)
         glRenderView.setRenderer(myRenderer)
         glRenderView.setOnRecordListener(this)
+        glRenderView.setOnShootListener(this)
 
         //一些功能按钮
         fragmentCameraBinding.apply {
@@ -71,30 +72,56 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
                     cameraButton!!.setCaptureMode(CameraMode.PHOTO)
                 }
             }
-            brightSeekBar!!.progress = cameraHelper.getBrightness()
-            brightSeekBar.setOnSeekBarChangeListener(
+            exposureSeekBar!!.setOnSeekBarChangeListener(
                 object : SeekBar.OnSeekBarChangeListener{
                     override fun onProgressChanged(
                         seekBar: SeekBar?,
                         progress: Int,
                         fromUser: Boolean
                     ) {
-                        cameraHelper.setBrightness(progress)
+                        myRenderer.setExposure(progress)
                     }
 
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
                     override fun onStopTrackingTouch(seekBar: SeekBar?) {}
                 }
             )
-            contrastSeekBar!!.progress = cameraHelper.getContrast()
-            contrastSeekBar.setOnSeekBarChangeListener(
+            saturationSeekBar!!.setOnSeekBarChangeListener(
                 object : SeekBar.OnSeekBarChangeListener{
                     override fun onProgressChanged(
                         seekBar: SeekBar?,
                         progress: Int,
                         fromUser: Boolean
                     ) {
-                        cameraHelper.setContrast(progress)
+                        myRenderer.setSaturation(progress)
+                    }
+
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+                }
+            )
+            contrastSeekBar!!.setOnSeekBarChangeListener(
+                object : SeekBar.OnSeekBarChangeListener{
+                    override fun onProgressChanged(
+                        seekBar: SeekBar?,
+                        progress: Int,
+                        fromUser: Boolean
+                    ) {
+                        myRenderer.setContrast(progress)
+                    }
+
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+                }
+            )
+            brightSeekBar!!.setOnSeekBarChangeListener(
+                object : SeekBar.OnSeekBarChangeListener{
+                    override fun onProgressChanged(
+                        seekBar: SeekBar?,
+                        progress: Int,
+                        fromUser: Boolean
+                    ) {
+                        myRenderer.setBrightness(progress)
                     }
 
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -177,7 +204,7 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
         super.onDestroyView()
     }
 
-    override fun shootFinish(path: String?) {
+    override fun shootFinish(path: String) {
         // Display the photo taken to user
         lifecycleScope.launch(Dispatchers.Main) {
             navController.navigate(CameraFragmentDirections
