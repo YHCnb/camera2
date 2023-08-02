@@ -152,6 +152,21 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
             v.translationY = (-insets.systemWindowInsetBottom).toFloat()
             insets.consumeSystemWindowInsets()
         }
+        //拍照
+        fragmentCameraBinding.cameraButton!!.setOnCapturedListener(
+            object : CameraButton.OnCapturedListener {
+                override fun onCapture() {
+                    // 先禁止，防止短时间重复请求
+                    fragmentCameraBinding.cameraButton!!.isEnabled = false
+
+                    glRenderView.post(animationTask)
+                    val output = createFile(requireContext(),"jpg")
+                    glRenderView.shoot(output.path)
+
+                    fragmentCameraBinding.cameraButton!!.post { fragmentCameraBinding.cameraButton!!.isEnabled = true }
+                }
+            }
+        )
         //录制
         fragmentCameraBinding.cameraButton!!.setOnRecordListener(
             object : CameraButton.OnRecordListener{
@@ -179,21 +194,6 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
 
                 override fun onRecordStop() {
                     glRenderView.stopRecord()
-                }
-            }
-        )
-        //拍照
-        fragmentCameraBinding.cameraButton!!.setOnCapturedListener(
-            object : CameraButton.OnCapturedListener {
-                override fun onCapture() {
-                    // 先禁止，防止短时间重复请求
-                    fragmentCameraBinding.cameraButton!!.isEnabled = false
-
-                    glRenderView.post(animationTask)
-                    val output = createFile(requireContext(),"jpg")
-                    glRenderView.shoot(output.absolutePath)
-
-                    fragmentCameraBinding.cameraButton!!.post { fragmentCameraBinding.cameraButton!!.isEnabled = true}
                 }
             }
         )
@@ -229,8 +229,9 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
          * @return [File] created.
          */
         private fun createFile(context: Context, extension: String): File {
+            val picDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)!!.path
             val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss_SSS", Locale.CHINA)
-            return File(context.filesDir, "IMG_${sdf.format(Date())}.$extension")
+            return File(picDir, "IMG_${sdf.format(Date())}.$extension")
         }
     }
 }
