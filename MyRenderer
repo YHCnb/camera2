@@ -38,9 +38,8 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         this.glRenderView = glRenderView
         val context = glRenderView.context
 
-
-        val sdcardDir = Environment.getExternalStorageDirectory().path
-        //拷贝 脸、眼部模型 TODO
+        val sdcardDir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)!!.path
+        //拷贝脸、眼部模型至sdcard TODO 无法实现大眼等，可能有关：imageReader
         OpenGlUtils.copyAssets2SdCard(
             context, "lbpcascade_frontalface_improved.xml",
             "$sdcardDir/lbpcascade_frontalface.xml"
@@ -82,10 +81,9 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         // 设置OpenGL ES视口
         cameraHelper!!.setPreviewSizeListener(this)
         cameraHelper!!.setOnPreviewListener(this)
-        //打开相机 和追踪器
+        //打开相机和追踪器
         cameraHelper!!.openCamera(surfaceTexture!!,width,height)
-        val sdcardDir = Environment.getExternalStorageDirectory().path
-        // TODO
+        val sdcardDir = glRenderView!!.context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)!!.path
         tracker = FaceTracker(
             "$sdcardDir/lbpcascade_frontalface.xml",
             "$sdcardDir/seeta_fa_v1.1.bin",
@@ -102,7 +100,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         screenX = width - (mPreviewHeight / max).toInt()
         screenY = height - (mPreviewWdith / max).toInt()
 
-        //prepare 传如 绘制到屏幕上的宽 高 起始点的X坐标 起使点的Y坐标
+        //prepare 传 绘制到屏幕上的宽、高、起始点的X坐标、起使点的Y坐标
         cameraFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
         screenFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
         saturationFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
@@ -118,7 +116,6 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     //每绘制一帧都会调用此方法
     override fun onDrawFrame(gl: GL10?) {
         var textureId:Int
-        // 配置屏幕
         //清理屏幕 :告诉opengl 需要把屏幕清理成什么颜色
         GLES20.glClearColor(0.0f,0.0f,0.0f,0.0f)
         //执行上一个：glClearColor配置的屏幕颜色
@@ -156,10 +153,6 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         val id = screenFilter!!.onDrawFrame(textureId)
         when(cameraMode){
             CameraMode.PHOTO->{
-                //进行录制
-                avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
-            }
-            CameraMode.VIDEO->{
                 if (isShooting){
                     //拍照并保存
                     isShooting=false
@@ -169,6 +162,10 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
                         onShootListener!!.shootFinish(shootPath)
                     }
                 }
+            }
+            CameraMode.VIDEO->{
+                //进行录制
+                avcRecorder!!.encodeFrame(id, surfaceTexture!!.timestamp)
             }
         }
     }
@@ -181,6 +178,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
             bos.flush()
             bos.close()
         } catch (e: FileNotFoundException) {
+            Log.e(TAG, "Unable to find the file", e)
             e.printStackTrace()
         } catch (e: IOException) {
             Log.e(TAG, "Unable to write JPEG image to file", e)
@@ -225,7 +223,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         // 翻转Bitmap
         val matrix = Matrix()
         matrix.preScale(1F, -1F)
-        bitmap = Bitmap.createBitmap(bitmap, 0, 0, mPreviewWdith, mPreviewHeight, matrix, false)
+        bitmap = Bitmap.createBitmap(bitmap, 0, 0, mPreviewHeight, mPreviewWdith, matrix, false)
 
         // 解绑FrameBuffer和纹理
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
