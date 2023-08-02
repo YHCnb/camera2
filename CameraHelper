@@ -172,12 +172,13 @@ class CameraHelper(private val context: Context) {
                     CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
                 val largest = map.getOutputSizes(PIXEL_FORMAT_VIDEO)
                     .maxByOrNull { it.height * it.width }!!
-                previewSize = chooseOptimalSize(
-                    map.getOutputSizes(SurfaceTexture::class.java),
-                    rotatedPreviewWidth, rotatedPreviewHeight,
-                    maxPreviewWidth, maxPreviewHeight,
-                    largest
-                )
+//                previewSize = chooseOptimalSize(
+//                    map.getOutputSizes(SurfaceTexture::class.java),
+//                    rotatedPreviewWidth, rotatedPreviewHeight,
+//                    maxPreviewWidth, maxPreviewHeight,
+//                    largest
+//                )
+                previewSize = Size(maxPreviewWidth, maxPreviewHeight)
                 onPreviewSizeListener?.onSize(previewSize.width, previewSize.height)
                 //创建imageReader
                 imageReader = ImageReader.newInstance(
@@ -377,8 +378,8 @@ class CameraHelper(private val context: Context) {
             val bigEnough: MutableList<Size> = ArrayList()
             // Collect the supported resolutions that are smaller than the preview Surface
             val notBigEnough: MutableList<Size> = ArrayList()
-            val w = aspectRatio.width
-            val h = aspectRatio.height
+            val w = aspectRatio.height
+            val h = aspectRatio.width
             for (option in choices) {
                 if (option.width <= maxWidth && option.height <= maxHeight && option.height == option.width * h / w) {
                     if (option.width >= textureViewWidth &&
