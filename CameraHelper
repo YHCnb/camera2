@@ -170,15 +170,16 @@ class CameraHelper(private val context: Context) {
                 val maxPreviewHeight = context.resources.displayMetrics.heightPixels
                 val map = characteristics.get(
                     CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
-                val largest = map.getOutputSizes(PIXEL_FORMAT_VIDEO)
-                    .maxByOrNull { it.height * it.width }!!
-//                previewSize = chooseOptimalSize(
-//                    map.getOutputSizes(SurfaceTexture::class.java),
-//                    rotatedPreviewWidth, rotatedPreviewHeight,
-//                    maxPreviewWidth, maxPreviewHeight,
-//                    largest
-//                )
-                previewSize = Size(maxPreviewWidth, maxPreviewHeight)
+                val largest = Collections.max(
+                    listOf(*map.getOutputSizes(ImageFormat.YUV_420_888)),
+                    CompareSizesByArea()
+                )
+                previewSize = chooseOptimalSize(
+                    map.getOutputSizes(SurfaceTexture::class.java),
+                    rotatedPreviewWidth, rotatedPreviewHeight,
+                    maxPreviewWidth, maxPreviewHeight,
+                    largest
+                )
                 onPreviewSizeListener?.onSize(previewSize.width, previewSize.height)
                 //创建imageReader
                 imageReader = ImageReader.newInstance(
@@ -217,7 +218,6 @@ class CameraHelper(private val context: Context) {
                         if (null == camera) {
                             return
                         }
-
                         // When the session is ready, we start displaying the preview.
                         cameraCaptureSession = session
                         try {
@@ -369,21 +369,29 @@ class CameraHelper(private val context: Context) {
         /** Maximum time allowed to wait for the result of an image capture */
         private const val IMAGE_CAPTURE_TIMEOUT_MILLIS: Long = 5000
 
+        /** 选择最优尺寸
+         *  注意：这里choices中 w 和 h 是相反的,函数中做反处理
+         * */
         private fun chooseOptimalSize(
             choices: Array<Size>, textureViewWidth: Int,
-            textureViewHeight: Int, maxWidth: Int, maxHeight: Int, aspectRatio: Size
+            textureViewHeight: Int, maxWidth: Int, maxHeight: Int, aspectRatio:Size
         ): Size {
 
             // Collect the supported resolutions that are at least as big as the preview Surface
             val bigEnough: MutableList<Size> = ArrayList()
             // Collect the supported resolutions that are smaller than the preview Surface
             val notBigEnough: MutableList<Size> = ArrayList()
-            val w = aspectRatio.height
-            val h = aspectRatio.width
+            val w = aspectRatio.width
+            val h = aspectRatio.height
+            val aspect = maxWidth.toFloat() / maxHeight
             for (option in choices) {
-                if (option.width <= maxWidth && option.height <= maxHeight && option.height == option.width * h / w) {
-                    if (option.width >= textureViewWidth &&
-                        option.height >= textureViewHeight
+                if (option.height <= maxWidth
+                    && option.width <= maxHeight
+//                    && option.height.toFloat()/option.width == aspect
+//                    && option.height == option.width * h / w
+                ) {
+                    if (option.height >= textureViewWidth &&
+                        option.width >= textureViewHeight
                     ) {
                         bigEnough.add(option)
                     } else {
@@ -394,7 +402,7 @@ class CameraHelper(private val context: Context) {
 
             // Pick the smallest of those big enough. If there is no one big enough, pick the
             // largest of those not big enough.
-            return when {
+            val newSize = when{
                 bigEnough.size > 0 -> {
                     Collections.min(bigEnough, CompareSizesByArea())
                 }
@@ -406,6 +414,7 @@ class CameraHelper(private val context: Context) {
                     choices[0]
                 }
             }
+            return Size(newSize.height,newSize.width)
         }
 
         internal class CompareSizesByArea : Comparator<Size> {
