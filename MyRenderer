@@ -91,14 +91,20 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         )
         tracker!!.startTrack()
 
-        val scaleX = mPreviewHeight.toFloat() / width.toFloat()
-        val scaleY = mPreviewWdith.toFloat() / height.toFloat()
+        val scaleX = mPreviewWdith.toFloat() / width.toFloat()
+        val scaleY = mPreviewHeight.toFloat() / height.toFloat()
         val max = max(scaleX, scaleY)
 
-        screenSurfaceWid = (mPreviewHeight / max).toInt()
-        screenSurfaceHeight =(mPreviewWdith / max).toInt()
-        screenX = width - (mPreviewHeight / max).toInt()
-        screenY = height - (mPreviewWdith / max).toInt()
+        screenSurfaceWid = (mPreviewWdith / max).toInt()
+        screenSurfaceHeight =(mPreviewHeight / max).toInt()
+        screenX = (width - (mPreviewWdith / max).toInt())/2
+        screenY = (height - (mPreviewHeight / max).toInt())/2
+
+        // 设置 TextureView 的变换矩阵，保持预览画面不变形
+//        val transformMatrix = Matrix()
+//        transformMatrix.setScale(scaleX, scaleY)
+//        glRenderView!!.animationMatrix = transformMatrix
+        glRenderView!!.setAspectRatio(mPreviewWdith,mPreviewHeight)
 
         //prepare 传 绘制到屏幕上的宽、高、起始点的X坐标、起使点的Y坐标
         cameraFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
@@ -109,7 +115,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         brightnessFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
 
         val eglContext = EGL14.eglGetCurrentContext()
-        avcRecorder = AvcRecorder(glRenderView!!.context, mPreviewHeight, mPreviewWdith, eglContext)
+        avcRecorder = AvcRecorder(glRenderView!!.context, mPreviewWdith, mPreviewHeight, eglContext)
         avcRecorder!!.setOnRecordListener(onRecordListener)
     }
 
@@ -126,6 +132,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         surfaceTexture!!.updateTexImage()
         // 渲染预览纹理
         surfaceTexture!!.getTransformMatrix(mtx)
+
         //cameraFiler需要一个矩阵，是Surface和我们手机屏幕的一个坐标之间的关系
         cameraFilter!!.setMatrix(mtx)
 
@@ -202,8 +209,8 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
             0
         )
 
-        val snapWidth: Int = mPreviewHeight
-        val snapHeight: Int = mPreviewWdith
+        val snapWidth: Int = mPreviewWdith
+        val snapHeight: Int = mPreviewHeight
         val size: Int = snapWidth * snapHeight
         val buf: ByteBuffer = ByteBuffer.allocateDirect(size * 4)
         buf.order(ByteOrder.nativeOrder())
@@ -223,7 +230,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         // 翻转Bitmap
         val matrix = Matrix()
         matrix.preScale(1F, -1F)
-        bitmap = Bitmap.createBitmap(bitmap, 0, 0, mPreviewHeight, mPreviewWdith, matrix, false)
+        bitmap = Bitmap.createBitmap(bitmap, 0, 0, mPreviewWdith, mPreviewHeight, matrix, false)
 
         // 解绑FrameBuffer和纹理
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
@@ -251,6 +258,10 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         Log.e(TAG, "mPreviewHeight:$mPreviewHeight")
     }
 
+    override fun onPreviewFrame(data: ByteArray?, len: Int) {
+        if (tracker != null && (stickEnable || bigEyeEnable)) tracker!!.detector(data)
+    }
+
     fun shoot(path: String){
         shootPath = path
         isShooting = true
@@ -262,10 +273,6 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
 
     fun stopRecord() {
         avcRecorder!!.stop()
-    }
-
-    override fun onPreviewFrame(data: ByteArray?, len: Int) {
-        if (tracker != null && (stickEnable || bigEyeEnable)) tracker!!.detector(data)
     }
 
     fun setOnRecordListener(onRecordListener: OnRecordListener?) {
