@@ -52,6 +52,35 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
         glRenderView.setOnRecordListener(this)
         glRenderView.setOnShootListener(this)
 
+        glRenderView.holder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
+
+            override fun surfaceChanged(
+                holder: SurfaceHolder,
+                format: Int,
+                width: Int,
+                height: Int) = Unit
+
+            override fun surfaceCreated(holder: SurfaceHolder) {
+                // Selects appropriate preview size and configures view finder
+                val previewSize = getPreviewOutputSize(
+//                    fragmentCameraBinding.viewFinder.display,
+                    glRenderView.display,
+                    cameraHelper.getCharacteristics(),
+                    SurfaceHolder::class.java
+                )
+                Log.d(TAG, "View finder size: ${glRenderView.width} x ${glRenderView.height}")
+                Log.d(TAG, "Selected preview size: $previewSize")
+                glRenderView.setAspectRatio(
+                    previewSize.width,
+                    previewSize.height
+                )
+
+                // To ensure that size is set, initialize camera in the view's thread
+                view.post { initializeCamera() }
+            }
+        })
+
         //一些功能按钮
         fragmentCameraBinding.apply {
             beauty!!.setOnClickListener{
