@@ -39,7 +39,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         val context = glRenderView.context
 
         val sdcardDir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)!!.path
-        //拷贝脸、眼部模型至sdcard TODO 无法实现大眼等，可能有关：imageReader
+        //拷贝脸、眼部模型至sdcard TODO 无法实现大眼等效果，可能有关：imageReader
         OpenGlUtils.copyAssets2SdCard(
             context, "lbpcascade_frontalface_improved.xml",
             "$sdcardDir/lbpcascade_frontalface.xml"
@@ -97,14 +97,8 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
 
         screenSurfaceWid = (mPreviewWdith / max).toInt()
         screenSurfaceHeight =(mPreviewHeight / max).toInt()
-        screenX = (width - (mPreviewWdith / max).toInt())/2
-        screenY = (height - (mPreviewHeight / max).toInt())/2
-
-        // 设置 TextureView 的变换矩阵，保持预览画面不变形
-//        val transformMatrix = Matrix()
-//        transformMatrix.setScale(scaleX, scaleY)
-//        glRenderView!!.animationMatrix = transformMatrix
-        glRenderView!!.setAspectRatio(mPreviewWdith,mPreviewHeight)
+        screenX = (width - (mPreviewWdith / max).toInt())
+        screenY = (height - (mPreviewHeight / max).toInt())
 
         //prepare 传 绘制到屏幕上的宽、高、起始点的X坐标、起使点的Y坐标
         cameraFilter!!.prepare(screenSurfaceWid, screenSurfaceHeight, screenX, screenY)
@@ -178,7 +172,7 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     }
 
     /** 保存图片 */
-    private suspend fun saveResult(bitmap: Bitmap) {
+    private fun saveResult(bitmap: Bitmap) {
         try {
             val bos = BufferedOutputStream(FileOutputStream(shootPath))
             bitmap.compress(Bitmap.CompressFormat.JPEG,100,bos)
@@ -222,6 +216,20 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
         )
         val data = IntArray(size)
         buf.asIntBuffer().get(data)
+
+        // 将RGBA格式的颜色转换为ARGB格式
+        for (i in data.indices) {
+            // 获取原始颜色
+            val originalColor = data[i]
+
+            // 将RGBA颜色转换为ARGB颜色
+            val argbColor = (originalColor and 0xff00ff00.toInt()) or
+                    ((originalColor and 0xff0000) shr 16) or
+                    ((originalColor and 0xff) shl 16)
+
+            // 更新像素数组中的颜色值
+            data[i] = argbColor
+        }
 
         // 创建一个临时的Bitmap对象
         var bitmap = Bitmap.createBitmap(snapWidth, snapHeight, Bitmap.Config.ARGB_8888)
