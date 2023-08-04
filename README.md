@@ -52,34 +52,34 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
         glRenderView.setOnRecordListener(this)
         glRenderView.setOnShootListener(this)
 
-        glRenderView.holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
-
-            override fun surfaceChanged(
-                holder: SurfaceHolder,
-                format: Int,
-                width: Int,
-                height: Int) = Unit
-
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                // Selects appropriate preview size and configures view finder
-                val previewSize = getPreviewOutputSize(
-//                    fragmentCameraBinding.viewFinder.display,
-                    glRenderView.display,
-                    cameraHelper.getCharacteristics(),
-                    SurfaceHolder::class.java
-                )
-                Log.d(TAG, "View finder size: ${glRenderView.width} x ${glRenderView.height}")
-                Log.d(TAG, "Selected preview size: $previewSize")
-                glRenderView.setAspectRatio(
-                    previewSize.width,
-                    previewSize.height
-                )
-
-                // To ensure that size is set, initialize camera in the view's thread
-                view.post { initializeCamera() }
-            }
-        })
+//        glRenderView.holder.addCallback(object : SurfaceHolder.Callback {
+//            override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
+//
+//            override fun surfaceChanged(
+//                holder: SurfaceHolder,
+//                format: Int,
+//                width: Int,
+//                height: Int) = Unit
+//
+//            override fun surfaceCreated(holder: SurfaceHolder) {
+//                // Selects appropriate preview size and configures view finder
+//                val previewSize = getPreviewOutputSize(
+////                    fragmentCameraBinding.viewFinder.display,
+//                    glRenderView.display,
+//                    cameraHelper.getCharacteristics(),
+//                    SurfaceHolder::class.java
+//                )
+//                Log.d(TAG, "View finder size: ${glRenderView.width} x ${glRenderView.height}")
+//                Log.d(TAG, "Selected preview size: $previewSize")
+//                glRenderView.setAspectRatio(
+//                    previewSize.height,
+//                    previewSize.width
+//                )
+//
+//                // To ensure that size is set, initialize camera in the view's thread
+////                view.post { initializeCamera() }
+//            }
+//        })
 
         //一些功能按钮
         fragmentCameraBinding.apply {
@@ -96,9 +96,11 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
                 if (captureModeSwitch.isChecked){
                     glRenderView.setCameraMode(CameraMode.VIDEO)
                     cameraButton!!.setCaptureMode(CameraMode.VIDEO)
+                    captureModeSwitch.text = getString(R.string.video_mode)
                 }else{
                     glRenderView.setCameraMode(CameraMode.PHOTO)
                     cameraButton!!.setCaptureMode(CameraMode.PHOTO)
+                    captureModeSwitch.text = getString(R.string.photo_mode)
                 }
             }
             exposureSeekBar!!.setOnSeekBarChangeListener(
@@ -181,7 +183,7 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
             v.translationY = (-insets.systemWindowInsetBottom).toFloat()
             insets.consumeSystemWindowInsets()
         }
-        //拍照
+        //拍照Listener
         fragmentCameraBinding.cameraButton!!.setOnCapturedListener(
             object : CameraButton.OnCapturedListener {
                 override fun onCapture() {
@@ -189,34 +191,27 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
                     fragmentCameraBinding.cameraButton!!.isEnabled = false
 
                     glRenderView.post(animationTask)
-                    val output = createFile(requireContext(),"jpg")
-                    glRenderView.shoot(output.path)
+                    try {
+                        val output = createFile(requireContext(),"jpg")
+                        glRenderView.shoot(output.absolutePath)
+                    }catch (e: NullPointerException){
+                        e.printStackTrace()
+                    }
 
                     fragmentCameraBinding.cameraButton!!.post { fragmentCameraBinding.cameraButton!!.isEnabled = true }
                 }
             }
         )
-        //录制
+        //录制Listener
         fragmentCameraBinding.cameraButton!!.setOnRecordListener(
             object : CameraButton.OnRecordListener{
                 override fun onRecordStart() {
                     try {
-                        // TODO 和拍照的creatFile合并
-                        val sdf = SimpleDateFormat("yyyyMMddHHmmss", Locale.CHINA)
-                        val file: File = FileUtil.createFile(
-                            context, false, "opengl",
-                            sdf.format(Date(System.currentTimeMillis())) + ".mp4", 1074000000
-                        )
+                        val output = createFile(requireContext(),"mp4")
 
-                        glRenderView.setSavePath(file.absolutePath)
+                        glRenderView.setSavePath(output.absolutePath)
                         glRenderView.startRecord()
-                    } catch (e: FileUtil.NoExternalStoragePermissionException) {
-                        e.printStackTrace()
-                    } catch (e: FileUtil.NoExternalStorageMountedException) {
-                        e.printStackTrace()
-                    } catch (e: FileUtil.DirHasNoFreeSpaceException) {
-                        e.printStackTrace()
-                    } catch (e: IOException) {
+                    } catch (e: NullPointerException) {
                         e.printStackTrace()
                     }
                 }
@@ -233,8 +228,9 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
         super.onDestroyView()
     }
 
+    /** 拍摄完成导航到图片预览 */
     override fun shootFinish(path: String) {
-        // Display the photo taken to user
+        Log.e(TAG, "Successfully save a photo in path:$path")
         lifecycleScope.launch(Dispatchers.Main) {
             navController.navigate(CameraFragmentDirections
                 .actionCameraToJpegViewer(path)
@@ -244,23 +240,25 @@ class CameraFragment :Fragment(), OnRecordListener,OnShootListener {
         }
     }
 
+    // TODO 导航到视频预览
     override fun recordFinish(path: String?) {
-//        val intent: Intent = Intent(this, SoulActivity::class.java)
-//        intent.putExtra("path", path)
-//        startActivity(intent)
+        Log.e(TAG, "Successfully save a video in path:$path")
     }
 
     companion object {
-        private val TAG = CameraFragment::class.java.simpleName
+        private val TAG = "CameraFragment"
 
-        /**
-         * Create a [File] named a using formatted timestamp with the current date and time.
-         * @return [File] created.
-         */
+        /** 创建特定格式的file */
         private fun createFile(context: Context, extension: String): File {
-            val picDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)!!.path
+            //保存在内部
+            //val saveDir = context.getExternalFilesDir(Environment.DIRECTORY_DCIM)!!.path
+
+            //保存在手机DCIM中
+            val rootsd = Environment.getExternalStorageDirectory()
+            val saveDir = File(rootsd.absolutePath + "/DCIM")
+
             val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss_SSS", Locale.CHINA)
-            return File(picDir, "IMG_${sdf.format(Date())}.$extension")
+            return File(saveDir, "${sdf.format(Date())}.$extension")
         }
     }
 }
