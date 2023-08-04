@@ -43,6 +43,24 @@ class CameraHelper(private val context: Context) {
     /**  surfaceTexture的surface */
     private var previewSurface: Surface? = null
 
+    init{
+        cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        for (id :String in cameraManager.cameraIdList) {
+            val cha = cameraManager.getCameraCharacteristics(id)
+            // 选择前摄像头
+            val facing = cha.get(CameraCharacteristics.LENS_FACING)
+            if (facing != null && facing != CameraCharacteristics.LENS_FACING_FRONT) {
+                continue
+            }
+            cha.get(
+                CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
+            ) ?: continue
+
+            cameraId = id
+            characteristics = cha
+        }
+    }
+
 
     fun getCameraId(): Int {
         return cameraId.toInt()
@@ -56,8 +74,6 @@ class CameraHelper(private val context: Context) {
     fun openCamera(mSurfaceTexture: SurfaceTexture,width:Int, height:Int) {
         surfaceTexture = mSurfaceTexture
         startBackgroundThread()
-
-        cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         //设置预览图像的大小，surfaceview的大小。
         setUpCameraOutputs(width,height)
         try {
@@ -137,60 +153,45 @@ class CameraHelper(private val context: Context) {
     /** Sets up member variables related to camera. 获取一些必要的量，为打开相机做准备*/
     private fun setUpCameraOutputs(width:Int, height:Int) {
         try {
-            for (id :String in cameraManager.cameraIdList) {
-                val cha = cameraManager.getCameraCharacteristics(id)
-                // 选择前摄像头
-                val facing = cha.get(CameraCharacteristics.LENS_FACING)
-                if (facing != null && facing != CameraCharacteristics.LENS_FACING_FRONT) {
-                    continue
-                }
-                cha.get(
-                    CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
-                ) ?: continue
-
-                cameraId = id
-                characteristics = cha
-
-                //获取所有支持的AWB模式
-                awbModes.addAll(characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES)!!.asList())
-                if (currentAWB == -1) {
-                    currentAWB = awbModes[0]
-                    currentAWBIdx = 0
-                }
-
-                val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-
-                val displayMetrics = DisplayMetrics()
-                windowManager.defaultDisplay.getRealMetrics(displayMetrics)
-
-                //设置预览尺寸
-                val rotatedPreviewWidth: Int = width
-                val rotatedPreviewHeight: Int = height
-                val maxPreviewWidth = context.resources.displayMetrics.widthPixels
-                val maxPreviewHeight = context.resources.displayMetrics.heightPixels
-                val map = characteristics.get(
-                    CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
-                val largest = Collections.max(
-                    listOf(*map.getOutputSizes(ImageFormat.YUV_420_888)),
-                    CompareSizesByArea()
-                )
-                previewSize = chooseOptimalSize(
-                    map.getOutputSizes(SurfaceTexture::class.java),
-                    rotatedPreviewWidth, rotatedPreviewHeight,
-                    maxPreviewWidth, maxPreviewHeight,
-                    largest
-                )
-                onPreviewSizeListener?.onSize(previewSize.width, previewSize.height)
-                //创建imageReader
-                imageReader = ImageReader.newInstance(
-                    previewSize.width, previewSize.height, PIXEL_FORMAT_VIDEO, IMAGE_BUFFER_SIZE
-                )
-                //录像
-                imageReader.setOnImageAvailableListener(
-                    onImageAvailableListener,
-                    cameraHandler
-                )
+            //获取所有支持的AWB模式
+            awbModes.addAll(characteristics.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES)!!.asList())
+            if (currentAWB == -1) {
+                currentAWB = awbModes[0]
+                currentAWBIdx = 0
             }
+
+            val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+            val displayMetrics = DisplayMetrics()
+            windowManager.defaultDisplay.getRealMetrics(displayMetrics)
+
+            //设置预览尺寸
+            val rotatedPreviewWidth: Int = width
+            val rotatedPreviewHeight: Int = height
+            val maxPreviewWidth = context.resources.displayMetrics.widthPixels
+            val maxPreviewHeight = context.resources.displayMetrics.heightPixels
+            val map = characteristics.get(
+                CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
+            val largest = Collections.max(
+                listOf(*map.getOutputSizes(PIXEL_FORMAT_VIDEO)),
+                CompareSizesByArea()
+            )
+            previewSize = chooseOptimalSize(
+                map.getOutputSizes(SurfaceTexture::class.java),
+                rotatedPreviewWidth, rotatedPreviewHeight,
+                maxPreviewWidth, maxPreviewHeight,
+                largest
+            )
+            onPreviewSizeListener?.onSize(previewSize.width, previewSize.height)
+            //创建imageReader
+            imageReader = ImageReader.newInstance(
+                previewSize.width, previewSize.height, PIXEL_FORMAT_VIDEO, IMAGE_BUFFER_SIZE
+            )
+            //录像
+            imageReader.setOnImageAvailableListener(
+                onImageAvailableListener,
+                cameraHandler
+            )
         } catch (e: CameraAccessException) {
             e.printStackTrace()
         } catch (e: NullPointerException) {
@@ -383,12 +384,12 @@ class CameraHelper(private val context: Context) {
             val notBigEnough: MutableList<Size> = ArrayList()
             val w = aspectRatio.width
             val h = aspectRatio.height
-            val aspect = maxWidth.toFloat() / maxHeight
+//            val aspect = maxWidth.toFloat() / maxHeight
+            val aspect = 3f/4
             for (option in choices) {
                 if (option.height <= maxWidth
                     && option.width <= maxHeight
-//                    && option.height.toFloat()/option.width == aspect
-//                    && option.height == option.width * h / w
+                    && option.height.toFloat()/option.width == aspect
                 ) {
                     if (option.height >= textureViewWidth &&
                         option.width >= textureViewHeight
