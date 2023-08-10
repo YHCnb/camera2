@@ -29,11 +29,9 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
     }
 
     /**
-     * Sets the aspect ratio for this view. The size of the view will be
-     * measured based on the ratio calculated from the parameters.
-     *
-     * @param width  Camera resolution horizontal size
-     * @param height Camera resolution vertical size
+     *  确定预览尺寸时调用
+     *  通过holder.setFixedSize固定view的宽高
+     *  再通过设置aspectRatio，让onMeasure函数做出改变
      */
     fun setAspectRatio(width: Int, height: Int) {
         require(width > 0 && height > 0) { "Size cannot be negative" }
@@ -78,7 +76,7 @@ class GlRenderView @JvmOverloads constructor(context: Context?, attrs: Attribute
 
     fun startRecord(savePath: String?) {
         val speed: Float
-        = when (mSpeed) {
+                = when (mSpeed) {
             Speed.MODE_EXTRA_SLOW -> 0.3f
             Speed.MODE_SLOW -> 0.5f
             Speed.MODE_NORMAL -> 1f

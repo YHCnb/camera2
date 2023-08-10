@@ -15,7 +15,6 @@ import android.util.Log
 import android.util.Size
 import android.view.Surface
 import android.view.WindowManager
-import com.example.android.camera2.basic.fragments.CameraFragment
 import java.util.*
 import kotlin.collections.ArrayList
 
@@ -83,7 +82,6 @@ class CameraHelper(private val context: Context) {
         }
     }
 
-
     fun getCameraId(): Int {
         return cameraId.toInt()
     }
@@ -100,13 +98,7 @@ class CameraHelper(private val context: Context) {
         setUpCameraOutputs(width,height)
         try {
             if (context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                // TODO: Consider calling
-                //    Activity#requestPermissions
-                // here to request the missing permissions, and then overriding
-                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                //                                          int[] grantResults)
-                // to handle the case where the user grants the permission. See the documentation
-                // for Activity#requestPermissions for more details.
+                // TODO: 导航回PermissionsFragment
                 return
             }
             cameraManager.openCamera(cameraId, mStateCallback, cameraHandler)
@@ -188,21 +180,16 @@ class CameraHelper(private val context: Context) {
             windowManager.defaultDisplay.getRealMetrics(displayMetrics)
 
             //设置预览尺寸
-            val rotatedPreviewWidth: Int = width
-            val rotatedPreviewHeight: Int = height
             val maxPreviewWidth = context.resources.displayMetrics.widthPixels
             val maxPreviewHeight = context.resources.displayMetrics.heightPixels
-            val map = characteristics.get(
-                CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
-            val largest = Collections.max(
-                listOf(*map.getOutputSizes(PIXEL_FORMAT_VIDEO)),
-                CompareSizesByArea()
-            )
+            val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)!!
+
+            // TODO 由于畸变问题，这里暂时固定选择4：3的尺寸，待改
             previewSize = chooseOptimalSize(
                 map.getOutputSizes(SurfaceTexture::class.java),
-                rotatedPreviewWidth, rotatedPreviewHeight,
-                maxPreviewWidth, maxPreviewHeight,
-                largest
+                Size(width,height),
+                Size(maxPreviewWidth,maxPreviewHeight),
+                4f/3
             )
             onPreviewSizeListener?.onSize(previewSize.width, previewSize.height)
             //创建imageReader
@@ -223,16 +210,16 @@ class CameraHelper(private val context: Context) {
     /** Creates a new [CameraCaptureSession] for camera preview. */
     private fun createCameraPreviewSession() {
         try {
-            // This is the output Surface we need to start preview.
+            // 用于预览的Surface
             surfaceTexture!!.setDefaultBufferSize(previewSize.width, previewSize.height)
             previewSurface = Surface(surfaceTexture)
 
-            // We set up a CaptureRequest.Builder with the output Surface.
+            // 获取一个CaptureRequest.Builder
             previewRequestBuilder = camera!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
             previewRequestBuilder!!.addTarget(previewSurface!!)
             previewRequestBuilder!!.addTarget(imageReader.surface)
 
-            // Here, we create a CameraCaptureSession for camera preview.
+            // 创建CameraCaptureSession
             camera!!.createCaptureSession(
                 listOf(previewSurface, imageReader.surface),
                 object : CameraCaptureSession.StateCallback() {
@@ -380,38 +367,39 @@ class CameraHelper(private val context: Context) {
     }
 
     companion object {
-        private val TAG = CameraFragment::class.java.simpleName
+        private val TAG = "CameraHelper"
         /** 照片格式 */
         private const val PIXEL_FORMAT_PHOTO = ImageFormat.JPEG
         /** 视频格式 */
         private const val PIXEL_FORMAT_VIDEO = ImageFormat.YUV_420_888
 
-        /** Maximum number of images that will be held in the reader's buffer */
+        /** imageReader缓存的最大照片数量 */
         private const val IMAGE_BUFFER_SIZE: Int = 3
 
-        /** 选择最优尺寸
+        /**
+         *  选择最优尺寸
          *  注意：这里choices中 w 和 h 是相反的,函数中做反处理
-         * */
+         *  @param choices 相机支持的所有尺寸
+         *  @param previewSize 预览的尺寸
+         *  @param maxSize 支持最大的尺寸（通常为设备屏幕尺寸）
+         *  @param aspectRadio 尺寸比例
+         */
         private fun chooseOptimalSize(
-            choices: Array<Size>, textureViewWidth: Int,
-            textureViewHeight: Int, maxWidth: Int, maxHeight: Int, aspectRatio:Size
+            choices: Array<Size>, previewSize: Size, maxSize: Size, aspectRadio: Float
         ): Size {
 
-            // Collect the supported resolutions that are at least as big as the preview Surface
+            // 比preview view大的尺寸
             val bigEnough: MutableList<Size> = ArrayList()
-            // Collect the supported resolutions that are smaller than the preview Surface
+            // 比preview view小的尺寸
             val notBigEnough: MutableList<Size> = ArrayList()
-            val w = aspectRatio.width
-            val h = aspectRatio.height
-//            val aspect = maxWidth.toFloat() / maxHeight
-            val aspect = 3f/4
+
             for (option in choices) {
-                if (option.height <= maxWidth
-                    && option.width <= maxHeight
-                    && option.height.toFloat()/option.width == aspect
+                if (option.height <= maxSize.width
+                    && option.width <= maxSize.height
+                    && option.height.toFloat()/option.width == aspectRadio
                 ) {
-                    if (option.height >= textureViewWidth &&
-                        option.width >= textureViewHeight
+                    if (option.height >= previewSize.width &&
+                        option.width >= previewSize.height
                     ) {
                         bigEnough.add(option)
                     } else {
@@ -420,8 +408,7 @@ class CameraHelper(private val context: Context) {
                 }
             }
 
-            // Pick the smallest of those big enough. If there is no one big enough, pick the
-            // largest of those not big enough.
+            // 从bigEnough中选取最小的尺寸，或者从notBigEnough中选取最大的尺寸
             val newSize = when{
                 bigEnough.size > 0 -> {
                     Collections.min(bigEnough, CompareSizesByArea())
@@ -434,12 +421,13 @@ class CameraHelper(private val context: Context) {
                     choices[0]
                 }
             }
+            // 反处理候选项的width和height
             return Size(newSize.height,newSize.width)
         }
 
+        /** 按面积大小比较Size */
         internal class CompareSizesByArea : Comparator<Size> {
             override fun compare(lhs: Size, rhs: Size): Int {
-                // We cast here to ensure the multiplications won't overflow
                 return java.lang.Long.signum(
                     lhs.width.toLong() * lhs.height -
                             rhs.width.toLong() * rhs.height

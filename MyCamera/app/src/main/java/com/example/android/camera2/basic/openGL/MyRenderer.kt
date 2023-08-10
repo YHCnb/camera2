@@ -35,15 +35,22 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     private val TAG = "MyRenderer"
     private var glRenderView: GlRenderView? = null
     private var cameraHelper: CameraHelper? = mCameraHelper
+
+    private var mPreviewWdith = 0
+    private var mPreviewHeight = 0
+    private var screenSurfaceWid = 0
+    private var screenSurfaceHeight = 0
+    private var screenX = 0
+    private var screenY = 0
+
+    private var avcRecorder: AvcRecorder? = null
+    private var tracker: FaceTracker? = null
     private lateinit var mTextures: IntArray
     private var surfaceTexture: SurfaceTexture? = null
     private val mtx = FloatArray(16)
+
     private var screenFilter: ScreenFilter? = null
     private var cameraFilter: CameraFilter? = null
-    private var mPreviewWdith = 0
-    private var mPreviewHeight = 0
-    private var avcRecorder: AvcRecorder? = null
-    private var tracker: FaceTracker? = null
     private var bigEyeFilter: BigEyeFilter? = null
     private var stickerFilter: StickerFilter? = null
     private var beautyFilter: BeautifyFilter? = null
@@ -51,12 +58,10 @@ class MyRenderer (glRenderView: GlRenderView,mCameraHelper: CameraHelper): GLSur
     private var contrastFilter:ContrastFilter? = null
     private var exposureFilter:ExposureFilter? = null
     private var brightnessFilter:BrightnessFilter? = null
+
     private var onRecordListener: OnRecordListener? = null
     private var onShootListener: OnShootListener? = null
-    private var screenSurfaceWid = 0
-    private var screenSurfaceHeight = 0
-    private var screenX = 0
-    private var screenY = 0
+
     private var stickEnable = false
     private var bigEyeEnable = false
     private var beautyEnable = false

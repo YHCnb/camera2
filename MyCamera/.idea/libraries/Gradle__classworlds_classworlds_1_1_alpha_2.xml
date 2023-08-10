@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Gradle: classworlds:classworlds:1.1-alpha-2">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/../../../../.gradle/caches/modules-2/files-2.1/classworlds/classworlds/1.1-alpha-2/5adf2e681c57d7f48038b602f3ca2254ee82d47/classworlds-1.1-alpha-2.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$PROJECT_DIR$/../../../../.gradle/caches/modules-2/files-2.1/classworlds/classworlds/1.1-alpha-2/c143977810d6345b60e0d28515110a949a29a3a8/classworlds-1.1-alpha-2-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$PROJECT_DIR$/../../../../.gradle/caches/modules-2/files-2.1/classworlds/classworlds/1.1-alpha-2/abb380e98a84e7c83c7e8a33244d3628c797cc9/classworlds-1.1-alpha-2-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
