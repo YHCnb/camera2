@@ -24,5 +24,11 @@
 
 项目主要参考来源：[OpenGlCameraRender](https://github.com/wangchao0837/OpenGlCameraRender)、[Camera2Basic](https://github.com/googlearchive/android-Camera2Basic)
 
+## TODO_LIST
++ **加入视频预览Fragment**
++ **预览尺寸未与智慧屏适配，仅固定4:3**
++ **人脸识别存在问题，导致BigEye和Sticker无法正常运行**
++ **UI设计**
+
 ## 结构预览
 ![UML用例图-导出](https://github.com/YHCnb/camera2/assets/112797916/542b67e0-c713-409f-826b-3ff5d472f7d5)  
