@@ -1,10 +1,11 @@
 ## Fragment nav  
-![UML用例图-导出2](https://github.com/YHCnb/camera2/assets/112797916/5cde095c-5f5e-4737-874d-2f45274d48f1)   
+![UML用例图-导出](https://github.com/YHCnb/camera2/assets/112797916/ba0c59db-db48-49dc-b6eb-0451c4cbef33)
 参照谷歌官方示例项目[Camera2Basic](https://github.com/googlearchive/android-Camera2Basic)，把Fragment简单地分为三块：**权限请求**、**相机主页**、**照片预览**。  
 **TODO:可加入视频预览Fragment**  
 
 ## 画面处理流程  
-![画面流程](https://github.com/YHCnb/camera2/assets/112797916/b8e91bc6-677c-4cf7-8bb3-6f3c86b8d412)  
+![未命名文件-导出3](https://github.com/YHCnb/camera2/assets/112797916/09ca6650-1f70-4108-b69b-b57dc614cae4)
+
 通过多步处理得到最终画面：  
 1. **摄像头->Camera**，通过previewRequestBuilder设置一些基础的相机模式:  
     + 对焦模式
@@ -31,4 +32,5 @@
 + **UI设计**
 
 ## 结构预览
-![UML用例图-导出](https://github.com/YHCnb/camera2/assets/112797916/542b67e0-c713-409f-826b-3ff5d472f7d5)  
+![UML用例图-导出2](https://github.com/YHCnb/camera2/assets/112797916/e786e855-e0c7-41b7-b70b-8daad5744ff8)
+
